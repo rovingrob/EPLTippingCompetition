@@ -293,9 +293,128 @@ tr:last-child td {
   font-weight: 800;
 }
 
+.sr-only {
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
 .match-number {
   color: var(--muted);
   font-feature-settings: "tnum";
+  font-weight: 800;
+}
+
+.fixture-row {
+  cursor: pointer;
+}
+
+.fixture-row:focus-visible {
+  outline: 3px solid var(--accent-soft);
+  outline-offset: -3px;
+}
+
+.fixture-row.is-expanded {
+  background: var(--accent-subtle);
+}
+
+.fixture-number-cell {
+  white-space: nowrap;
+}
+
+.fixture-toggle {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--accent-strong);
+  display: inline-flex;
+  height: 26px;
+  justify-content: center;
+  min-height: 26px;
+  margin-right: 8px;
+  padding: 0;
+  vertical-align: middle;
+  width: 26px;
+}
+
+.fixture-toggle:hover {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.fixture-row.is-expanded .fixture-toggle {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.fixture-arrow {
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 6px solid currentColor;
+  height: 0;
+  transform-origin: center;
+  transition: transform 140ms ease;
+  width: 0;
+}
+
+.fixture-row.is-expanded .fixture-arrow {
+  transform: rotate(180deg);
+}
+
+.fixture-prediction-row > td {
+  background: color-mix(in srgb, var(--accent-subtle) 45%, var(--panel));
+  padding: 0 14px 14px 56px;
+}
+
+.fixture-prediction-row:hover {
+  background: transparent;
+}
+
+.fixture-predictions {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.fixture-predictions-head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.fixture-prediction-scroll {
+  overflow-x: auto;
+}
+
+.fixture-prediction-table {
+  min-width: 680px;
+}
+
+.fixture-points {
+  font-feature-settings: "tnum";
+  margin-left: 6px;
+}
+
+.fixture-error {
+  color: var(--warning);
+  display: block;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.contestant-name {
   font-weight: 800;
 }
 

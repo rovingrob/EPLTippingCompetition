@@ -178,6 +178,7 @@ def load_context(request: Request) -> dict[str, Any]:
             contestant["id"]: latest_simulation(simulations, contestant["id"])
             for contestant in registry
         },
+        "fixture_prediction_rows": fixture_prediction_rows_by_match(fixtures, registry, predictions, scores),
         "leaderboard": leaderboard(registry, scores),
         "summary": schedule_summary(fixtures),
         "run_log": run_log,
@@ -224,6 +225,56 @@ def contestant_prediction_rows(
             }
         )
     return rows
+
+
+def fixture_prediction_rows_by_match(
+    fixtures: list[dict[str, Any]],
+    registry: list[dict[str, Any]],
+    predictions: list[dict[str, Any]],
+    scores: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    predictions_by_key = prediction_lookup(predictions)
+    scores_by_key = score_lookup(scores)
+    contestants_by_id = {contestant["id"]: contestant for contestant in registry}
+    registered_ids = [contestant["id"] for contestant in registry]
+    extra_ids = sorted(
+        {
+            item["contestant_id"]
+            for item in [*predictions, *scores]
+            if item.get("contestant_id") and item["contestant_id"] not in contestants_by_id
+        }
+    )
+    contestant_ids = registered_ids + extra_ids
+
+    rows_by_match = {}
+    for fixture in fixtures:
+        match_id = fixture["match_id"]
+        rows = []
+        submission_count = 0
+        for contestant_id in contestant_ids:
+            contestant = contestants_by_id.get(
+                contestant_id,
+                {"id": contestant_id, "name": contestant_id, "status": "unknown"},
+            )
+            prediction_record = predictions_by_key.get((contestant_id, match_id))
+            prediction = prediction_record.get("prediction") if prediction_record else None
+            if prediction_record:
+                submission_count += 1
+            rows.append(
+                {
+                    "contestant": contestant,
+                    "registered": contestant_id in contestants_by_id,
+                    "prediction_record": prediction_record,
+                    "prediction": prediction,
+                    "score": scores_by_key.get((contestant_id, match_id)),
+                }
+            )
+        rows_by_match[match_id] = {
+            "rows": rows,
+            "contestant_count": len(rows),
+            "submission_count": submission_count,
+        }
+    return rows_by_match
 
 
 def latest_simulation(simulations: list[dict[str, Any]], contestant_id: str) -> dict[str, Any] | None:

@@ -62,11 +62,15 @@
     </thead>
     <tbody>
       {% for fixture in fixtures %}
+      {% set fixture_predictions = fixture_prediction_rows.get(fixture.match_id) %}
       <tr
+        class="fixture-row"
         data-search="{{ fixture.match_number }} {{ fixture.stage|stage_label }} {{ fixture.group or '' }} {{ display_team(fixture, 'a') }} {{ display_team(fixture, 'b') }} {{ fixture.winner or '' }} {{ fixture.status }}"
         data-stage="{{ fixture.stage }}"
         data-status="{{ fixture.status }}"
         data-number="{{ fixture.match_number }}"
+        data-expandable-row
+        data-detail-row="fixture-predictions-{{ fixture.match_id }}"
         data-sort-number="{{ fixture.match_number }}"
         data-sort-stage="{{ fixture.stage|stage_label }}"
         data-sort-kickoff="{{ fixture.kickoff_at }}"
@@ -75,8 +79,15 @@
         data-sort-result="{% if is_completed_fixture(fixture) %}{{ fixture.score_a }}-{{ fixture.score_b }}{% endif %}"
         data-sort-winner="{{ fixture.winner or '' }}"
         data-sort-status="{{ fixture.status }}"
+        tabindex="0"
       >
-        <td class="match-number">{{ fixture.match_number }}</td>
+        <td class="match-number fixture-number-cell">
+          <button class="fixture-toggle" type="button" data-fixture-toggle aria-expanded="false" aria-controls="fixture-predictions-{{ fixture.match_id }}">
+            <span class="fixture-arrow" aria-hidden="true"></span>
+            <span class="sr-only">Show predictions for match {{ fixture.match_number }}</span>
+          </button>
+          <span>{{ fixture.match_number }}</span>
+        </td>
         <td><span class="stage-pill">{{ fixture.stage|stage_label }}</span>
           {% if fixture.group %}<span class="muted">Group {{ fixture.group }}</span>{% endif %}
         </td>
@@ -92,6 +103,90 @@
         </td>
         <td>{{ fixture.winner or ("Draw" if is_completed_fixture(fixture) else "TBD") }}</td>
         <td><span class="status">{{ fixture.status }}</span></td>
+      </tr>
+      <tr id="fixture-predictions-{{ fixture.match_id }}" class="fixture-prediction-row" hidden>
+        <td colspan="8">
+          <div class="fixture-predictions">
+            <div class="fixture-predictions-head">
+              <div>
+                <strong>Predictions</strong>
+                <span class="muted">{{ display_team(fixture, "a") }} vs {{ display_team(fixture, "b") }}</span>
+              </div>
+              {% if fixture_predictions and fixture_predictions.contestant_count %}
+                <span class="status">{{ fixture_predictions.submission_count }} / {{ fixture_predictions.contestant_count }} submitted</span>
+              {% else %}
+                <span class="status">No users</span>
+              {% endif %}
+            </div>
+
+            {% if fixture_predictions and fixture_predictions.rows %}
+            <div class="fixture-prediction-scroll">
+              <table class="mini-table fixture-prediction-table">
+                <thead>
+                  <tr>
+                    <th>API / User</th>
+                    <th>Prediction</th>
+                    <th>Winner</th>
+                    <th>Confidence</th>
+                    <th>Outcome</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in fixture_predictions.rows %}
+                  {% set prediction = row.prediction %}
+                  <tr>
+                    <td>
+                      {% if row.registered %}
+                        <a class="contestant-link" href="{{ app_path('/leaderboard/' ~ row.contestant.id) }}">{{ row.contestant.name }}</a>
+                      {% else %}
+                        <span class="contestant-name">{{ row.contestant.name }}</span>
+                      {% endif %}
+                      <span class="muted">{{ row.contestant.status }}</span>
+                    </td>
+                    <td>
+                      {% if prediction %}
+                        <span class="scoreline">{{ prediction.predicted_score_a }} - {{ prediction.predicted_score_b }}</span>
+                      {% elif row.prediction_record and not row.prediction_record.valid %}
+                        <span class="muted">Invalid response</span>
+                        {% if row.prediction_record.error %}<span class="fixture-error">{{ row.prediction_record.error }}</span>{% endif %}
+                      {% else %}
+                        <span class="muted">No prediction</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if prediction %}
+                        {{ prediction.predicted_winner or "Draw" }}
+                      {% else %}
+                        <span class="muted">TBD</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if prediction and prediction.confidence is not none %}
+                        {{ "%.0f"|format(prediction.confidence * 100) }}%
+                      {% else %}
+                        <span class="muted">Not set</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if row.score %}
+                        <span class="status">{{ row.score.reason }}</span>
+                        <strong class="fixture-points">{{ "%.1f"|format(row.score.points) }}</strong>
+                      {% elif row.prediction_record and not row.prediction_record.valid %}
+                        <span class="status is-warning">invalid</span>
+                      {% else %}
+                        <span class="muted">Unscored</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+              <p class="empty">No APIs or users registered yet.</p>
+            {% endif %}
+          </div>
+        </td>
       </tr>
       {% else %}
       <tr><td colspan="8" class="empty">No fixtures loaded.</td></tr>

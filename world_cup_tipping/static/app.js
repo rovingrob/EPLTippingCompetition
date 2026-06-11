@@ -77,6 +77,27 @@ function getFilterValue(row, key) {
   return row.getAttribute(`data-${key}`) || "";
 }
 
+function getAttachedDetailRow(row) {
+  const detailRowId = row.getAttribute("data-detail-row");
+  return detailRowId ? document.getElementById(detailRowId) : null;
+}
+
+function isRowExpanded(row) {
+  return row.querySelector("[data-fixture-toggle]")?.getAttribute("aria-expanded") === "true";
+}
+
+function setExpandableRow(row, expanded) {
+  const toggle = row.querySelector("[data-fixture-toggle]");
+  const detailRow = getAttachedDetailRow(row);
+  row.classList.toggle("is-expanded", expanded);
+  if (toggle) {
+    toggle.setAttribute("aria-expanded", String(expanded));
+  }
+  if (detailRow) {
+    detailRow.hidden = !expanded || row.style.display === "none";
+  }
+}
+
 function applyTableFilters(table) {
   const query = normalize(getSearchInput(table)?.value);
   const filters = getFilterInputs(table);
@@ -92,6 +113,10 @@ function applyTableFilters(table) {
     });
     const visible = matchesSearch && matchesFilters;
     row.style.display = visible ? "" : "none";
+    const detailRow = getAttachedDetailRow(row);
+    if (detailRow) {
+      detailRow.hidden = !visible || !isRowExpanded(row);
+    }
     if (visible) {
       visibleCount += 1;
     }
@@ -131,7 +156,13 @@ function sortTable(table, button) {
 
   sortableRows(table)
     .sort((a, b) => compareRows(a, b, key, type, direction))
-    .forEach((row) => body.appendChild(row));
+    .forEach((row) => {
+      body.appendChild(row);
+      const detailRow = getAttachedDetailRow(row);
+      if (detailRow) {
+        body.appendChild(detailRow);
+      }
+    });
 
   applyTableFilters(table);
 }
@@ -150,6 +181,39 @@ function initializeTable(table) {
   });
 
   applyTableFilters(table);
+}
+
+function initializeExpandableRows() {
+  document.querySelectorAll("[data-expandable-row]").forEach((row) => {
+    const toggle = row.querySelector("[data-fixture-toggle]");
+    if (toggle) {
+      toggle.addEventListener("click", (event) => {
+        event.stopPropagation();
+        setExpandableRow(row, !isRowExpanded(row));
+      });
+    }
+
+    row.addEventListener("click", (event) => {
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+      if (event.target.closest("a, button, input, select, textarea, label")) {
+        return;
+      }
+      setExpandableRow(row, !isRowExpanded(row));
+    });
+
+    row.addEventListener("keydown", (event) => {
+      if (event.target !== row) {
+        return;
+      }
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+      event.preventDefault();
+      setExpandableRow(row, !isRowExpanded(row));
+    });
+  });
 }
 
 function initializeAutoSubmitControls() {
@@ -350,4 +414,5 @@ formatTimes();
 initializeAutoSubmitControls();
 initializeApiTester();
 initializeBracketScroll();
+initializeExpandableRows();
 document.querySelectorAll("[data-sortable-table]").forEach(initializeTable);

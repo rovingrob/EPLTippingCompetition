@@ -98,6 +98,69 @@ def test_schedule_json_downloads_current_fixtures(tmp_path, monkeypatch) -> None
     assert [fixture["match_number"] for fixture in response.json()] == [1, 2]
 
 
+def test_schedule_page_shows_fixture_prediction_details(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("WCT_DATA_DIR", str(tmp_path))
+    store = JsonStore(tmp_path)
+    store.ensure_defaults()
+    store.write(
+        "fixtures.json",
+        [
+            {
+                "match_id": "2026-001",
+                "match_number": 1,
+                "stage": "group",
+                "group": "A",
+                "team_a": "Mexico",
+                "team_b": "South Africa",
+                "team_a_placeholder": None,
+                "team_b_placeholder": None,
+                "kickoff_at": "2026-06-11T19:00:00Z",
+                "score_a": 2,
+                "score_b": 1,
+                "winner": "Mexico",
+                "status": "completed",
+            }
+        ],
+    )
+    store.write(
+        "registry.json",
+        [
+            {"id": "checked-bot", "name": "Checked Bot", "url": "http://example.test/predict", "contact": "", "status": "active"},
+            {"id": "quiet-bot", "name": "Quiet Bot", "url": "http://quiet.test/predict", "contact": "", "status": "active"},
+        ],
+    )
+    store.write(
+        "predictions.json",
+        [
+            {
+                "contestant_id": "checked-bot",
+                "match_id": "2026-001",
+                "valid": True,
+                "prediction": {"predicted_score_a": 2, "predicted_score_b": 1, "predicted_winner": "Mexico", "confidence": 0.8},
+            }
+        ],
+    )
+    store.write(
+        "scores.json",
+        [{"contestant_id": "checked-bot", "match_id": "2026-001", "points": 1.5, "reason": "exact_score", "scored_at": "2026-06-12T00:00:00Z"}],
+    )
+
+    client = TestClient(app)
+    response = client.get("/tipping/")
+
+    assert response.status_code == 200
+    assert "data-expandable-row" in response.text
+    assert "data-fixture-toggle" in response.text
+    assert "fixture-predictions-2026-001" in response.text
+    assert "1 / 2 submitted" in response.text
+    assert "Checked Bot" in response.text
+    assert "2 - 1" in response.text
+    assert "80%" in response.text
+    assert "exact_score" in response.text
+    assert "Quiet Bot" in response.text
+    assert "No prediction" in response.text
+
+
 def test_admin_clear_workflow_data_uses_temp_store(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("WCT_DATA_DIR", str(tmp_path))
     store = JsonStore(tmp_path)

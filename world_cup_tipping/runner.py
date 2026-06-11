@@ -16,7 +16,7 @@ from .storage import JsonStore, get_store
 @dataclass(frozen=True)
 class RunnerConfig:
     lock_minutes: int = 30
-    lookahead_hours: int = 3
+    lookahead_hours: int = 24
     timeout_seconds: float = 15.0
     retries: int = 1
 

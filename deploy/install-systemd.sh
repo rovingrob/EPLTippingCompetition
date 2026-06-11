@@ -156,7 +156,7 @@ Group=$SERVICE_GROUP
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$ENV_FILE
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=$PYTHON_BIN -m world_cup_tipping.cron run-due --data-dir $DATA_DIR
+ExecStart=$PYTHON_BIN -m world_cup_tipping.cron run-due --data-dir $DATA_DIR --lookahead-hours 24
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
@@ -171,11 +171,11 @@ EOF
 
 write_root_file 644 "/etc/systemd/system/$SERVICE_NAME-cron.timer" <<EOF
 [Unit]
-Description=Run World Cup Tipping due workflow every 5 minutes
+Description=Run World Cup Tipping due workflow every 4 hours
 
 [Timer]
 OnBootSec=2min
-OnUnitActiveSec=5min
+OnUnitActiveSec=4h
 AccuracySec=30s
 RandomizedDelaySec=20s
 Persistent=true

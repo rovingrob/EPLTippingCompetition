@@ -278,12 +278,14 @@ function validateApiPrediction(requestPayload, responseJson) {
     predictedWinner = null;
   }
   const knockoutStages = new Set(["round_of_32", "round_of_16", "quarterfinal", "semifinal", "third_place", "final"]);
-  const winnerRequired = knockoutStages.has(stage) || resultKey(scoreA, scoreB) !== "draw";
+  const isKnockoutStage = knockoutStages.has(stage);
+  const predictedResult = resultKey(scoreA, scoreB);
+  if (stage === "group" && predictedResult === "draw") {
+    predictedWinner = null;
+  }
+  const winnerRequired = isKnockoutStage || predictedResult !== "draw";
   if (winnerRequired && predictedWinner !== teamA && predictedWinner !== teamB) {
     return { valid: false, prediction: null, error: "Predicted winner must be one of the fixture teams." };
-  }
-  if (!winnerRequired && predictedWinner !== null && predictedWinner !== undefined && predictedWinner !== teamA && predictedWinner !== teamB) {
-    return { valid: false, prediction: null, error: "Predicted winner must be empty or one of the fixture teams." };
   }
 
   return {

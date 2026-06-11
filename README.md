@@ -233,7 +233,7 @@ For group stage matches:
 - draws are allowed
 - `predicted_winner` is required if the predicted score is not a draw
 - `predicted_winner` may be omitted or set to `null` if the predicted score is a draw
-- if supplied, `predicted_winner` must be either `team_a` or `team_b`
+- if supplied with a drawn scoreline, `predicted_winner` is ignored and the prediction is treated as a draw
 
 Group stage draw example:
 
@@ -281,6 +281,7 @@ Knockout draw with penalty winner example:
 ## Scoring
 
 Group-stage scoring is intentionally simple.
+For group-stage predictions, the result is always taken from the predicted scoreline. A drawn predicted scoreline is scored as a draw even if the API response includes `predicted_winner`.
 
 | Outcome | Points |
 | --- | ---: |

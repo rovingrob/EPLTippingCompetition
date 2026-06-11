@@ -17,7 +17,7 @@ def main() -> None:
     run_due.add_argument("--data-dir", type=Path, default=None)
     run_due.add_argument("--now", default=None, help="UTC ISO timestamp override, for tests or dry runs.")
     run_due.add_argument("--lock-minutes", type=int, default=30)
-    run_due.add_argument("--lookahead-hours", type=int, default=3)
+    run_due.add_argument("--lookahead-hours", type=int, default=24)
     run_due.add_argument("--timeout-seconds", type=float, default=15.0)
     run_due.add_argument("--retries", type=int, default=1)
     args = parser.parse_args()

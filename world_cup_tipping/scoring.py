@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .models import KNOCKOUT_STAGES, result_key, utc_now, isoformat_z
+from .models import KNOCKOUT_STAGES, STAGE_GROUP, result_key, utc_now, isoformat_z
 
 
 KNOCKOUT_STAGE_POINTS = {
@@ -43,11 +43,13 @@ def validate_prediction(fixture: dict[str, Any], payload: dict[str, Any]) -> tup
     if predicted_winner == "":
         predicted_winner = None
 
+    group_stage_draw = fixture["stage"] == STAGE_GROUP and score_a == score_b
+    if group_stage_draw:
+        predicted_winner = None
+
     winner_required = fixture["stage"] in KNOCKOUT_STAGES or score_a != score_b
     if winner_required and predicted_winner not in {team_a, team_b}:
         return False, None, "Predicted winner must be one of the fixture teams"
-    if not winner_required and predicted_winner is not None and predicted_winner not in {team_a, team_b}:
-        return False, None, "Predicted winner must be empty or one of the fixture teams"
 
     return (
         True,

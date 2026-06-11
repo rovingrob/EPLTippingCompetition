@@ -111,10 +111,10 @@ Set `WCT_ALLOWED_HOSTS` only after confirming the exact hostname Cloudflare send
 
 ## Cron
 
-The timer runs the workflow every 5 minutes:
+The timer runs the workflow every 4 hours and checks fixtures 24 hours in advance:
 
 ```bash
-python -m world_cup_tipping.cron run-due --data-dir /var/lib/world-cup-tipping/data
+python -m world_cup_tipping.cron run-due --data-dir /var/lib/world-cup-tipping/data --lookahead-hours 24
 ```
 
 It records predictions for fixtures in the configured lookahead window and scores completed fixtures, including retrospective completed matches.

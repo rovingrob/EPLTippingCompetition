@@ -43,6 +43,19 @@ def test_correct_draw_result_is_one_point() -> None:
     assert reason == "correct_result"
 
 
+def test_group_stage_draw_prediction_ignores_supplied_winner_for_scoring() -> None:
+    draw_fixture = fixture(score_a=0, score_b=0, winner=None)
+    points, reason = score_prediction(draw_fixture, prediction(1, 1, "Mexico"))
+    assert points == 1.0
+    assert reason == "correct_result"
+
+
+def test_group_stage_draw_prediction_with_winner_does_not_score_as_winner() -> None:
+    points, reason = score_prediction(fixture(score_a=1, score_b=0), prediction(1, 1, "Mexico"))
+    assert points == 0.0
+    assert reason == "incorrect_result"
+
+
 def test_incorrect_result_is_zero_points() -> None:
     points, reason = score_prediction(fixture(), prediction(0, 1, "South Africa"))
     assert points == 0.0
@@ -75,6 +88,13 @@ def test_confidence_is_validated_when_supplied() -> None:
     assert valid is False
     assert normalized is None
     assert "Confidence" in error
+
+
+def test_group_stage_draw_prediction_normalizes_winner_to_draw() -> None:
+    valid, normalized, error = validate_prediction(fixture(), prediction(1, 1, "Mexico"))
+    assert valid is True
+    assert normalized["predicted_winner"] is None
+    assert error is None
 
 
 def test_knockout_draw_requires_winner() -> None:

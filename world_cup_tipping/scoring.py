@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from typing import Any
 
 from .models import KNOCKOUT_STAGES, STAGE_GROUP, result_key, utc_now, isoformat_z
@@ -30,6 +31,7 @@ SNAKE_COLORS = [
     "#65a30d",
     "#c2410c",
 ]
+SNAKE_POINT_SCALE_RANK_WEIGHT = 0.45
 
 
 def validate_prediction(fixture: dict[str, Any], payload: dict[str, Any]) -> tuple[bool, dict[str, Any] | None, str | None]:
@@ -208,6 +210,43 @@ def _point_axis(max_points: float) -> tuple[float, list[float]]:
     ceiling = math.ceil(target / step) * step
     tick_count = int(round(ceiling / step))
     return ceiling, [round(index * step, 1) for index in range(tick_count + 1)]
+
+
+def _snake_point_scale(point_axis_max: float, current_points: list[float]) -> Callable[[float], float]:
+    distinct_points = sorted({round(float(points), 6) for points in current_points})
+    anchors = {
+        0.0: 0.0,
+        point_axis_max: 1.0,
+    }
+    if len(distinct_points) >= 2:
+        final_index = len(distinct_points) - 1
+        for index, points in enumerate(distinct_points):
+            linear_position = points / point_axis_max
+            rank_position = index / final_index
+            anchors[points] = (
+                linear_position * (1 - SNAKE_POINT_SCALE_RANK_WEIGHT)
+                + rank_position * SNAKE_POINT_SCALE_RANK_WEIGHT
+            )
+
+    ordered_anchors = sorted(anchors.items())
+
+    def scaled_position(points: float) -> float:
+        clamped_points = min(max(float(points), 0.0), point_axis_max)
+        if clamped_points <= ordered_anchors[0][0]:
+            return ordered_anchors[0][1]
+        for (left_points, left_position), (right_points, right_position) in zip(
+            ordered_anchors,
+            ordered_anchors[1:],
+            strict=False,
+        ):
+            if clamped_points <= right_points:
+                if right_points == left_points:
+                    return right_position
+                segment_ratio = (clamped_points - left_points) / (right_points - left_points)
+                return left_position + segment_ratio * (right_position - left_position)
+        return ordered_anchors[-1][1]
+
+    return scaled_position
 
 
 def _svg_snake_path(points: list[tuple[float, float]]) -> str:
@@ -442,6 +481,7 @@ def leaderboard_snake(
     remaining_count = max(0, len(axis_match_ids) - len(scored_match_ids))
     plot_right_edge = chart["width"] - chart["plot_right"]
     point_axis_max, point_guide_values = _point_axis(max(totals.values()))
+    point_scale = _snake_point_scale(point_axis_max, list(totals.values()))
 
     for checkpoint in checkpoints:
         if checkpoint_count == 1:
@@ -472,7 +512,7 @@ def leaderboard_snake(
         }
 
     def y_for_points(points: float) -> float:
-        return chart["plot_top"] + (1 - points / point_axis_max) * y_span
+        return chart["plot_top"] + (1 - point_scale(points)) * y_span
 
     point_guides = [
         {

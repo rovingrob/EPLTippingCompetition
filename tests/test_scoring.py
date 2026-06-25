@@ -175,6 +175,13 @@ def test_leaderboard_snake_tracks_places_and_tied_ranks_over_matches() -> None:
     assert rows["charlie"]["last_move_label"] == "down 2"
     assert rows["alpha"]["current"]["y"] == rows["bravo"]["current"]["y"]
     assert rows["alpha"]["current"]["y"] < rows["charlie"]["current"]["y"]
+    y_span = snake["chart"]["height"] - snake["chart"]["plot_top"] - snake["chart"]["plot_bottom"]
+    linear_gap = (
+        (rows["alpha"]["current_points"] - rows["charlie"]["current_points"])
+        / snake["point_guides"][-1]["value"]
+        * y_span
+    )
+    assert rows["charlie"]["current"]["y"] - rows["alpha"]["current"]["y"] > linear_gap
     assert rows["alpha"]["current"]["label_x"] > rows["alpha"]["current"]["x"]
     assert rows["bravo"]["current"]["label_x"] > rows["alpha"]["current"]["label_x"]
     assert rows["alpha"]["current"]["show_label_stem"] is True

@@ -690,6 +690,15 @@ tr:last-child td {
   width: 12px;
 }
 
+.leaderboard-wrap {
+  margin-top: 24px;
+}
+
+.leaderboard-wrap tbody td {
+  padding-bottom: 18px;
+  padding-top: 18px;
+}
+
 tbody tr.is-snake-highlight {
   background: var(--accent-subtle);
   box-shadow: inset 4px 0 0 var(--accent);

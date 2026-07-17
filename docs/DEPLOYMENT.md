@@ -1,120 +1,129 @@
 # Deployment
 
-This setup assumes Cloudflare Tunnel forwards your public hostname to `http://127.0.0.1:8000` on the server. The FastAPI app should bind only to loopback; do not expose port `8000` directly to the internet.
+This deployment uses one FastAPI worker, JSON state, systemd timers, and a
+Cloudflare Tunnel forwarding the public hostname to
+`http://127.0.0.1:8000`. Do not expose port 8000 directly.
 
 ## Install
 
-From the repo:
+Install `uv`, clone the repository, then run:
 
 ```bash
 chmod +x deploy/install-systemd.sh
 ./deploy/install-systemd.sh
 ```
 
-The installer:
+By default the installer:
 
-- copies this repo to `/opt/world-cup-tipping` by default
-- runs `uv sync --frozen`
-- creates `/var/lib/world-cup-tipping/data`
-- copies existing JSON data into that data directory if it is missing there
-- creates `/etc/world-cup-tipping.env` with generated secrets if it does not exist
-- installs `world-cup-tipping.service`
-- installs `world-cup-tipping-cron.service` and `world-cup-tipping-cron.timer`
-- reloads systemd without starting anything
+- copies the repository to `/opt/epl-tipping`;
+- installs locked dependencies;
+- creates `/var/lib/epl-tipping/data` and seeds missing JSON files;
+- creates `/etc/epl-tipping.env` with generated admin secrets when absent;
+- installs the app service and the due-workflow and projection-worker timers;
+- reloads systemd without starting the units.
 
-The `/opt/world-cup-tipping` default matters on Fedora and other SELinux-enforcing systems. System services are often blocked from executing virtualenv scripts directly under `/home`, even when Unix permissions look correct.
+The `/opt` location avoids common virtualenv execution restrictions on
+SELinux-enforcing hosts.
 
-Start the app and timer when you are ready:
+Edit `/etc/epl-tipping.env` before starting the services. At minimum, set a
+valid football-data.org token and the exact public hostname:
 
-```bash
-sudo systemctl enable --now world-cup-tipping.service world-cup-tipping-cron.timer
+```text
+FOOTBALL_DATA_TOKEN=<server-only API token>
+TIPPING_COMPETITION_CODE=PL
+TIPPING_SEASON=2026
+TIPPING_DISPLAY_TIMEZONE=Australia/Sydney
+TIPPING_ALLOWED_HOSTS=tipping.example.com,localhost,127.0.0.1
 ```
 
-If you previously installed a unit that points at `/home/.../world_cup_tipping/.venv/bin/uvicorn` and it fails with `status=203/EXEC`, rerun the installer from the repo, then restart:
+Start the app and timers:
 
 ```bash
-./deploy/install-systemd.sh
-sudo systemctl restart world-cup-tipping.service
+sudo systemctl enable --now epl-tipping.service epl-tipping-cron.timer epl-tipping-projection.timer
 ```
 
-Check status:
+Check status and health:
 
 ```bash
-sudo systemctl status world-cup-tipping.service
-sudo systemctl status world-cup-tipping-cron.timer
+sudo systemctl status epl-tipping.service
+sudo systemctl status epl-tipping-cron.timer
+sudo systemctl status epl-tipping-projection.timer
 curl http://127.0.0.1:8000/tipping/healthz
 ```
 
 Read logs:
 
 ```bash
-sudo journalctl -u world-cup-tipping.service -f
-sudo journalctl -u world-cup-tipping-cron.service -f
+sudo journalctl -u epl-tipping.service -f
+sudo journalctl -u epl-tipping-cron.service
+sudo journalctl -u epl-tipping-projection.service
 ```
 
 ## Secrets
 
-The admin login token is stored in `/etc/world-cup-tipping.env`.
-
-Production must set all of these values:
+Production requires:
 
 ```text
+FOOTBALL_DATA_TOKEN=<football-data.org API token>
 ADMIN_TOKEN=<long random admin login token>
 ADMIN_COOKIE_SECRET=<different long random cookie secret>
 ADMIN_COOKIE_SECURE=true
 ```
 
-Never reuse `ADMIN_TOKEN` as `ADMIN_COOKIE_SECRET`, and never commit
-`/etc/world-cup-tipping.env`, `.env`, or generated secrets.
+Never reuse the admin token as the cookie secret. Keep
+`/etc/epl-tipping.env`, local `.env` files, and generated secrets outside git.
+The installer preserves an existing environment file when redeployed and never
+copies a repository-root `.env` into `/opt/epl-tipping`. Once the API token is in
+`/etc/epl-tipping.env`, the local `.env` is not needed by the deployed service.
+
+After editing it, restart the app; the next timer runs will use the new values:
 
 ```bash
-sudo awk -F= '/^ADMIN_TOKEN=/{print $2}' /etc/world-cup-tipping.env
+sudo systemctl restart epl-tipping.service
 ```
 
-For production, keep `ADMIN_COOKIE_SECURE=true` so the encrypted admin cookie is only sent over HTTPS. If you test directly over plain local HTTP, temporarily set it to `false` and restart the service.
+## Cloudflare Tunnel and admin protection
 
-After editing the env file:
+Use `deploy/cloudflared-tunnel.example.yml` as the ingress shape and keep the
+host firewall closed to public port 8000. Protect `/tipping/admin*` with
+Cloudflare Access in addition to the application's admin login.
 
-```bash
-sudo systemctl restart world-cup-tipping.service
-```
-
-## Cloudflare Tunnel
-
-Use `deploy/cloudflared-tunnel.example.yml` as the shape for your tunnel ingress:
-
-```yaml
-ingress:
-  - hostname: tipping.example.com
-    service: http://127.0.0.1:8000
-  - service: http_status:404
-```
-
-Keep your server firewall closed to public port `8000`. Binding uvicorn to `127.0.0.1` is the main protection; a firewall rule is a useful backup.
-
-## Admin Protection
-
-Use Cloudflare Access for `/tipping/admin*` in front of the app. The app still
-requires `ADMIN_TOKEN`, but Access gives you an outer identity layer before the
-login page is reachable. Treat this as a production requirement, not an
-optional hardening step.
-
-Recommended production env values:
+Recommended settings after HTTPS is working end to end:
 
 ```text
 ADMIN_COOKIE_SECURE=true
-WCT_ENABLE_HSTS=true
-WCT_ALLOWED_HOSTS=tipping.example.com,localhost,127.0.0.1
+TIPPING_ENABLE_HSTS=true
+TIPPING_ALLOWED_HOSTS=tipping.example.com,localhost,127.0.0.1
 ```
 
-Set `WCT_ALLOWED_HOSTS` only after confirming the exact hostname Cloudflare sends to the origin. If it is wrong, FastAPI will reject requests with `400 Invalid host header`.
+An incorrect allow-list causes `400 Invalid host header`, so verify the hostname
+Cloudflare forwards to the origin before enabling it.
 
-## Cron
+## Scheduled workflows
 
-The timer runs the workflow every 4 hours and checks fixtures 24 hours in advance:
+`epl-tipping-cron.timer` runs every four hours. Each invocation requests the
+configured season once, collects tips for scheduled fixtures from 24 hours until
+30 minutes before kickoff, and scores completed fixtures. Source failures are
+recorded while cached fixture processing continues.
+
+`epl-tipping-projection.timer` polls every minute and processes at most one
+durably queued full-season projection per invocation. The worker uses five
+concurrent contestant calls, a 15-second timeout, and one retry.
+
+Manual equivalents are:
 
 ```bash
-python -m world_cup_tipping.cron run-due --data-dir /var/lib/world-cup-tipping/data --lookahead-hours 24
+/opt/epl-tipping/.venv/bin/python -m epl_tipping.cron run-due --data-dir /var/lib/epl-tipping/data
+/opt/epl-tipping/.venv/bin/python -m epl_tipping.cron process-projection --data-dir /var/lib/epl-tipping/data
 ```
 
-It records predictions for fixtures in the configured lookahead window and scores completed fixtures, including retrospective completed matches.
+## Updating
+
+Run the installer again from the updated checkout. Existing environment and
+runtime JSON files are preserved because seed files are copied only when the
+destination file does not yet exist.
+
+```bash
+./deploy/install-systemd.sh
+sudo systemctl restart epl-tipping.service
+```

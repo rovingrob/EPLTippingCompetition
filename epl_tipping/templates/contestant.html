@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% set title = contestant.name %}
+{% block content %}
+<section class="page-head"><div><p class="eyebrow">{{ contestant.status }}</p><h1>{{ contestant.name }}</h1>{% if is_admin %}<p>{{ contestant.url }}</p>{% endif %}</div><div class="actions"><a class="button secondary" href="{{ app_path('/leaderboard/' ~ contestant.id ~ '/tips') }}">Tips only</a>{% if is_admin %}<a class="button secondary" href="{{ app_path('/leaderboard/' ~ contestant.id ~ '/api-test') }}">Test API</a>{% endif %}<a class="button" href="{{ app_path('/leaderboard/' ~ contestant.id ~ '/projection') }}">Season projection</a></div></section>
+<section class="table-wrap"><table><thead><tr><th>MD</th><th>Kickoff</th><th>Fixture</th><th>Prediction</th><th>Result</th><th>Outcome</th><th>Points</th></tr></thead><tbody>
+{% for row in prediction_rows %}{% set fixture = row.fixture %}
+<tr><td>{{ fixture.matchday or "—" }}</td><td><time data-utc="{{ fixture.kickoff_at or '' }}">{{ fixture.kickoff_at or "TBC" }}</time></td><td>{{ display_team(fixture, "home") }} vs {{ display_team(fixture, "away") }}</td>
+<td>{% if row.hidden %}<span class="muted">Hidden until lock</span>{% elif row.prediction %}<span class="score">{{ row.prediction.predicted_score_home }}–{{ row.prediction.predicted_score_away }}</span>{% elif row.prediction_record and not row.prediction_record.valid %}<span class="error">Invalid response</span>{% else %}<span class="muted">No prediction</span>{% endif %}</td>
+<td>{% if is_completed_fixture(fixture) %}<span class="score">{{ fixture.score_home }}–{{ fixture.score_away }}</span>{% else %}<span class="muted">Pending</span>{% endif %}</td><td>{{ row.score.reason|replace('_', ' ') if row.score else "—" }}</td><td><strong>{{ "%.1f"|format(row.score.points) if row.score else "—" }}</strong></td></tr>
+{% else %}<tr><td colspan="7" class="empty">No fixtures loaded.</td></tr>{% endfor %}</tbody></table></section>
+{% endblock %}

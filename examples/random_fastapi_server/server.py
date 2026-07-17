@@ -1,11 +1,11 @@
-from random import choice, randint, random
+from random import randint, random
 from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 
-app = FastAPI(title="Random World Cup Prediction Server")
+app = FastAPI(title="Random EPL Prediction Server")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,24 +21,11 @@ def health() -> dict[str, str]:
 
 @app.post("/predict")
 def predict(payload: dict[str, Any]):
-    team_a = payload["team_a"]
-    team_b = payload["team_b"]
-    stage = payload["stage"]
-
-    score_a = randint(0, 4)
-    score_b = randint(0, 4)
-
-    winner = None
-    if score_a > score_b:
-        winner = team_a
-    elif score_b > score_a:
-        winner = team_b
-    elif stage != "group":
-        winner = choice([team_a, team_b])
+    if payload.get("schema_version") != 1:
+        return {"error": "unsupported schema version"}
 
     return {
-        "predicted_score_a": score_a,
-        "predicted_score_b": score_b,
-        "predicted_winner": winner,
+        "predicted_score_home": randint(0, 4),
+        "predicted_score_away": randint(0, 4),
         "confidence": round(random(), 2),
     }

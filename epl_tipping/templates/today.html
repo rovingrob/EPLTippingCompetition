@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% set title = "Today's EPL Fixtures" %}
+{% block content %}
+<section class="page-head">
+  <div><p class="eyebrow">{{ display_timezone }}</p><h1>{% if is_today %}Today's Fixtures{% else %}Fixtures for {{ selected_date }}{% endif %}</h1></div>
+  <form method="get" class="inline-form"><input type="date" name="date" value="{{ selected_date }}"><button>Go</button></form>
+</section>
+<section class="card-grid">
+{% for fixture in today_fixtures %}
+  <article class="fixture-card">
+    <div class="fixture-meta"><span>Matchday {{ fixture.matchday or "—" }}</span><time data-utc="{{ fixture.kickoff_at }}">{{ fixture.kickoff_at }}</time></div>
+    <div class="fixture-teams"><strong>{{ display_team(fixture, "home") }}</strong><span class="score">{% if is_completed_fixture(fixture) %}{{ fixture.score_home }}–{{ fixture.score_away }}{% else %}vs{% endif %}</span><strong>{{ display_team(fixture, "away") }}</strong></div>
+    <span class="pill {{ fixture.status }}">{{ fixture.status|replace('_', ' ') }}</span>
+    <div class="tip-list compact">
+    {% for row in today_prediction_rows[fixture.match_id] %}
+      <div><span>{{ row.contestant.name }}</span>{% if row.hidden %}<span class="muted">Hidden</span>{% elif row.prediction %}<strong>{{ row.prediction.predicted_score_home }}–{{ row.prediction.predicted_score_away }}</strong>{% else %}<span class="muted">No tip</span>{% endif %}</div>
+    {% endfor %}
+    </div>
+  </article>
+{% else %}<div class="empty-state"><h2>No fixtures</h2><p>There are no Premier League fixtures on this date.</p></div>{% endfor %}
+</section>
+{% endblock %}

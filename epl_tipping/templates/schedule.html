@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% set title = "EPL Schedule" %}
+{% block content %}
+<section class="page-head">
+  <div><p class="eyebrow">{{ season_label }} season</p><h1>Premier League Schedule</h1><p>Fixtures and results synchronised from football-data.org.</p></div>
+  <a class="button secondary" href="{{ app_path('/schedule.json') }}">Download JSON</a>
+</section>
+
+<section class="metric-grid">
+  <article><span>Fixtures</span><strong>{{ summary.total }}</strong></article>
+  <article><span>Completed</span><strong>{{ summary.completed }}</strong></article>
+  <article><span>Remaining</span><strong>{{ summary.remaining }}</strong></article>
+  <article><span>Postponed</span><strong>{{ summary.postponed }}</strong></article>
+</section>
+
+<section class="toolbar" data-table-controls="schedule-table">
+  <label>Search <input type="search" data-table-search="schedule-table" placeholder="Team or matchday"></label>
+  <label>Status
+    <select data-table-filter="schedule-table" data-filter-key="status">
+      <option value="">All</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option>
+      <option value="in_progress">In progress</option><option value="postponed">Postponed</option>
+      <option value="suspended">Suspended</option><option value="cancelled">Cancelled</option>
+    </select>
+  </label>
+</section>
+
+<section class="table-wrap">
+<table id="schedule-table">
+  <thead><tr><th>MD</th><th>Kickoff</th><th>Home</th><th>Score</th><th>Away</th><th>Status</th><th>Tips</th></tr></thead>
+  <tbody>
+  {% for fixture in fixtures %}
+    {% set prediction_rows = fixture_prediction_rows[fixture.match_id] %}
+    <tr data-search="{{ fixture.matchday }} {{ fixture.home_team }} {{ fixture.home_team_short_name }} {{ fixture.away_team }} {{ fixture.away_team_short_name }}" data-status="{{ fixture.status }}">
+      <td>{{ fixture.matchday or "—" }}</td>
+      <td><time data-utc="{{ fixture.kickoff_at or '' }}">{{ fixture.kickoff_at or "TBC" }}</time></td>
+      <td><strong>{{ display_team(fixture, "home") }}</strong></td>
+      <td>{% if is_completed_fixture(fixture) %}<span class="score">{{ fixture.score_home }}–{{ fixture.score_away }}</span>{% else %}<span class="muted">vs</span>{% endif %}</td>
+      <td><strong>{{ display_team(fixture, "away") }}</strong></td>
+      <td><span class="pill {{ fixture.status }}">{{ fixture.status|replace('_', ' ') }}</span>{% if fixture.result_source == "manual" %}<span class="pill warning">manual</span>{% endif %}</td>
+      <td>
+        <details>
+          <summary>View</summary>
+          <div class="tip-list">
+          {% for row in prediction_rows %}
+            <div><strong>{{ row.contestant.name }}</strong>
+              {% if row.hidden %}<span class="muted">Hidden until lock</span>
+              {% elif row.prediction %}<span>{{ row.prediction.predicted_score_home }}–{{ row.prediction.predicted_score_away }}</span>
+              {% elif row.prediction_record and not row.prediction_record.valid %}<span class="error">Invalid</span>
+              {% else %}<span class="muted">No prediction</span>{% endif %}
+              {% if row.score %}<span>{{ "%.1f"|format(row.score.points) }} pts</span>{% endif %}
+            </div>
+          {% else %}<span class="muted">No contestants</span>{% endfor %}
+          </div>
+        </details>
+      </td>
+    </tr>
+  {% else %}<tr><td colspan="7" class="empty">No fixtures loaded. An administrator can run the first source sync.</td></tr>{% endfor %}
+  </tbody>
+</table>
+</section>
+{% endblock %}

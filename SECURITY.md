@@ -25,8 +25,9 @@ Production deployments must set:
 - `ADMIN_TOKEN`: a long random admin login token
 - `ADMIN_COOKIE_SECRET`: a different long random secret for encrypted cookies
 - `ADMIN_COOKIE_SECURE=true`: send admin cookies only over HTTPS
-- `WCT_ALLOWED_HOSTS`: the public hostnames Cloudflare sends to the origin
-- `WCT_ENABLE_HSTS=true`: once HTTPS is working end to end
+- `TIPPING_ALLOWED_HOSTS`: the public hostnames Cloudflare sends to the origin
+- `TIPPING_ENABLE_HSTS=true`: once HTTPS is working end to end
+- `FOOTBALL_DATA_TOKEN`: the server-only football-data.org API token
 
 The FastAPI app should bind only to `127.0.0.1`. Put Cloudflare Tunnel in front
 of it, and protect `/tipping/admin*` with Cloudflare Access.
@@ -35,11 +36,14 @@ of it, and protect `/tipping/admin*` with Cloudflare Access.
 
 - Admin endpoint validation makes server-side requests to contestant URLs.
   Treat admin access as trusted and keep Cloudflare Access enabled.
-- The public leaderboard API tester sends browser requests to contestant
-  endpoints. Contestant endpoints should use their own rate limits and CORS
-  rules.
+- The admin-only API tester sends browser requests to contestant endpoints.
+  Contestant endpoints should use their own rate limits and CORS rules.
 - Persistent state lives in JSON files. Keep `data/registry.json`,
   `data/predictions.json`, `data/scores.json`, `data/run_log.json`, and
-  `data/simulations.json` free of private data before publishing.
-- Do not publish scraped/raw third-party datasets, source workbooks, or other
-  imported data unless you have the right license.
+  `data/season_projections.json` free of private data before publishing.
+- Never expose `FOOTBALL_DATA_TOKEN` to templates, public responses, logs, or
+  contestant endpoints. The token belongs only in a protected deployment
+  environment file.
+- Contestant endpoints are untrusted remote services. Keep call timeouts,
+  concurrency limits, and the single-worker JSON storage deployment model in
+  place.

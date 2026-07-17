@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 
-app = FastAPI(title="Fixed World Cup Prediction Server")
+app = FastAPI(title="Fixed EPL Prediction Server")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,10 +20,10 @@ def health() -> dict[str, str]:
 
 @app.post("/predict")
 def predict(payload: dict[str, Any]) -> dict[str, Any]:
-    team_a = payload["team_a"]
+    if payload.get("schema_version") != 1:
+        return {"error": "unsupported schema version"}
     return {
-        "predicted_score_a": 2,
-        "predicted_score_b": 1,
-        "predicted_winner": team_a,
+        "predicted_score_home": 2,
+        "predicted_score_away": 1,
         "confidence": 0.9,
     }

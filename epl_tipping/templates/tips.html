@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% set title = contestant.name ~ " Tips" %}
+{% block content %}
+<section class="page-head"><div><p class="eyebrow">Predictions only</p><h1>{{ contestant.name }} Tips</h1><p>Upcoming predictions remain hidden until the 30-minute lock.</p></div><a class="button secondary" href="{{ app_path('/leaderboard/' ~ contestant.id) }}">Full details</a></section>
+<section class="table-wrap"><table><thead><tr><th>MD</th><th>Kickoff</th><th>Fixture</th><th>Tip</th><th>Confidence</th></tr></thead><tbody>
+{% for row in tip_rows %}{% set fixture = row.fixture %}<tr><td>{{ fixture.matchday or "—" }}</td><td><time data-utc="{{ fixture.kickoff_at or '' }}">{{ fixture.kickoff_at or "TBC" }}</time></td><td>{{ display_team(fixture, "home") }} vs {{ display_team(fixture, "away") }}</td><td>{% if row.hidden %}<span class="muted">Hidden</span>{% elif row.prediction %}<span class="score">{{ row.prediction.predicted_score_home }}–{{ row.prediction.predicted_score_away }}</span>{% else %}<span class="muted">No prediction</span>{% endif %}</td><td>{% if row.prediction and row.prediction.confidence is not none %}{{ "%.0f"|format(row.prediction.confidence * 100) }}%{% else %}—{% endif %}</td></tr>{% else %}<tr><td colspan="5" class="empty">No fixtures loaded.</td></tr>{% endfor %}</tbody></table></section>
+{% endblock %}

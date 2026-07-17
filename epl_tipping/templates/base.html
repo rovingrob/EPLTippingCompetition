@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title or "EPL Tipping" }}</title>
   <link rel="icon" href="{{ app_path('/favicon.ico') }}" type="image/svg+xml">
-  <link rel="stylesheet" href="{{ app_path('/static/styles.css') }}">
-  <script src="{{ app_path('/static/app.js') }}" defer></script>
+  <link rel="stylesheet" href="{{ app_path('/static/styles.css') }}?v=20260717-1">
+  <script src="{{ app_path('/static/app.js') }}?v=20260717-1" defer></script>
 </head>
-<body data-display-timezone="{{ display_timezone }}">
+<body>
   <header class="site-header">
     <a class="brand" href="{{ app_path('/') }}"><span class="brand-mark">PL</span><span>Tipping Competition</span></a>
     <nav aria-label="Primary navigation">
@@ -22,6 +22,6 @@
     {% if message %}<div class="notice">{{ message }}</div>{% endif %}
     {% block content %}{% endblock %}
   </main>
-  <footer>English Premier League · Times stored in UTC · Today view: {{ display_timezone }}</footer>
+  <footer>English Premier League · Times shown in <span data-browser-timezone>your timezone</span> · Competition rules: {{ competition_timezone }}</footer>
 </body>
 </html>

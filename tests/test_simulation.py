@@ -204,7 +204,7 @@ def test_simulated_table_calculates_points_goal_difference_and_tiebreaks() -> No
 
 
 def test_simulation_queue_rejects_unknown_inactive_duplicate_and_daily_repeat(store, make_fixture, monkeypatch) -> None:
-    monkeypatch.setenv("TIPPING_DISPLAY_TIMEZONE", "UTC")
+    monkeypatch.setenv("TIPPING_COMPETITION_TIMEZONE", "UTC")
     store.write("fixtures.json", [make_fixture(), make_fixture(source_match_id=2)])
     store.write(
         "registry.json",

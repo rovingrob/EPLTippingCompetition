@@ -11,7 +11,7 @@ from epl_tipping.storage import JsonStore
 
 def configure_app_store(tmp_path, monkeypatch) -> JsonStore:
     monkeypatch.setenv("TIPPING_DATA_DIR", str(tmp_path))
-    monkeypatch.setenv("TIPPING_DISPLAY_TIMEZONE", "UTC")
+    monkeypatch.setenv("TIPPING_COMPETITION_TIMEZONE", "UTC")
     monkeypatch.setenv("ADMIN_TOKEN", "route-test-token")
     monkeypatch.setenv("ADMIN_COOKIE_SECRET", "a-distinct-route-test-cookie-secret")
     store = JsonStore(tmp_path)
@@ -70,8 +70,8 @@ def test_root_pages_assets_and_security_headers_are_served_under_prefix(tmp_path
 
     page = client.get("/tipping/")
     assert "Premier League Schedule" in page.text
-    assert 'href="/tipping/static/styles.css"' in page.text
-    assert 'src="/tipping/static/app.js"' in page.text
+    assert 'href="/tipping/static/styles.css?v=' in page.text
+    assert 'src="/tipping/static/app.js?v=' in page.text
     assert "frame-ancestors 'none'" in page.headers["content-security-policy"]
     assert page.headers["x-frame-options"] == "DENY"
     assert page.headers["x-content-type-options"] == "nosniff"
@@ -205,6 +205,78 @@ def test_completed_future_dated_fixture_predictions_are_public_in_schedule(
     assert "Response" in response.text
     assert "Outcome" in response.text
     assert "Points" in response.text
+
+
+def test_today_restores_navigation_sorting_and_detailed_predictions(
+    tmp_path,
+    monkeypatch,
+    make_fixture,
+) -> None:
+    store = configure_app_store(tmp_path, monkeypatch)
+    store.write(
+        "fixtures.json",
+        [
+            make_fixture(
+                kickoff_at="2099-08-15T14:00:00Z",
+                status="completed",
+                source_status="FINISHED",
+                score_home=2,
+                score_away=1,
+            )
+        ],
+    )
+    store.write("registry.json", [endpoint()])
+    store.write("predictions.json", [prediction()])
+    store.write(
+        "scores.json",
+        [{"contestant_id": "alpha", "match_id": "fd-1001", "points": 0.0, "reason": "incorrect_result"}],
+    )
+
+    response = TestClient(app).get("/tipping/today?date=2099-08-15&tz=UTC")
+
+    assert response.status_code == 200
+    assert "1 fixtures" in response.text
+    assert 'aria-label="Previous day"' in response.text
+    assert 'aria-label="Next day"' in response.text
+    assert 'data-sortable-table' in response.text
+    assert 'data-sort-key="kickoff"' in response.text
+    assert 'data-expandable-row' in response.text
+    assert 'id="today-fixture-predictions-fd-1001"' in response.text
+    assert "7–6" in response.text
+    assert "Confidence" in response.text
+    assert "Response" in response.text
+    assert "Outcome" in response.text
+    assert "Points" in response.text
+
+
+def test_today_uses_requested_user_timezone_for_fixture_date(
+    tmp_path,
+    monkeypatch,
+    make_fixture,
+) -> None:
+    store = configure_app_store(tmp_path, monkeypatch)
+    store.write("fixtures.json", [make_fixture(kickoff_at="2026-08-15T23:30:00Z")])
+    client = TestClient(app)
+
+    sydney = client.get("/tipping/today?date=2026-08-16&tz=Australia/Sydney")
+    new_york = client.get("/tipping/today?date=2026-08-16&tz=America/New_York")
+    invalid = client.get("/tipping/today?date=2026-08-15&tz=not-a-timezone")
+
+    assert 'data-today-timezone="Australia/Sydney"' in sydney.text
+    assert 'today-fixture-predictions-fd-1001' in sydney.text
+    assert 'data-today-timezone="America/New_York"' in new_york.text
+    assert 'today-fixture-predictions-fd-1001' not in new_york.text
+    assert 'data-today-timezone="UTC"' in invalid.text
+
+
+def test_browser_script_uses_local_timezone_and_passes_it_to_today(tmp_path, monkeypatch) -> None:
+    configure_app_store(tmp_path, monkeypatch)
+
+    script = TestClient(app).get("/tipping/static/app.js").text
+
+    assert "resolvedOptions().timeZone" in script
+    assert 'url.searchParams.set("tz", timeZone)' in script
+    assert "timeZone: displayTimeZone" not in script
 
 
 def test_leaderboard_renders_interactive_snake(tmp_path, monkeypatch, make_fixture) -> None:

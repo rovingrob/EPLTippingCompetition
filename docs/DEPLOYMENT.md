@@ -32,9 +32,13 @@ valid football-data.org token and the exact public hostname:
 FOOTBALL_DATA_TOKEN=<server-only API token>
 TIPPING_COMPETITION_CODE=PL
 TIPPING_SEASON=2026
-TIPPING_DISPLAY_TIMEZONE=Australia/Sydney
+TIPPING_COMPETITION_TIMEZONE=Australia/Sydney
 TIPPING_ALLOWED_HOSTS=tipping.example.com,localhost,127.0.0.1
 ```
+
+`TIPPING_COMPETITION_TIMEZONE` controls competition-wide rules such as the
+public simulation daily limit. Fixture timestamps and Today-page date grouping
+use each visitor's browser timezone.
 
 Start the app and timers:
 

@@ -1,5 +1,26 @@
+function browserTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch (_) {
+    return "UTC";
+  }
+}
+
+function setupBrowserTimezone() {
+  const timeZone = browserTimeZone();
+  document.querySelectorAll("[data-browser-timezone]").forEach((element) => {
+    element.textContent = timeZone;
+  });
+
+  const todayPage = document.querySelector("[data-today-timezone]");
+  if (!todayPage || todayPage.dataset.todayTimezone === timeZone) return;
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("tz") === timeZone) return;
+  url.searchParams.set("tz", timeZone);
+  window.location.replace(url);
+}
+
 function formatUtcTimes() {
-  const displayTimeZone = document.body.dataset.displayTimezone || "Australia/Sydney";
   document.querySelectorAll("time[data-utc]").forEach((element) => {
     const value = element.dataset.utc;
     if (!value) return;
@@ -8,9 +29,66 @@ function formatUtcTimes() {
     element.textContent = new Intl.DateTimeFormat(undefined, {
       dateStyle: "medium",
       timeStyle: "short",
-      timeZone: displayTimeZone,
     }).format(parsed);
     element.title = value;
+  });
+}
+
+function sortableRows(table) {
+  const body = table.tBodies[0];
+  return body ? [...body.children].filter((row) => row.matches("tr[data-expandable-row]")) : [];
+}
+
+function sortableButtons(table) {
+  return table.tHead ? [...table.tHead.querySelectorAll("[data-sort-key]")] : [];
+}
+
+function compareRows(a, b, key, type, direction) {
+  const aValue = a.getAttribute(`data-sort-${key}`) || "";
+  const bValue = b.getAttribute(`data-sort-${key}`) || "";
+  let result;
+  if (type === "number") {
+    result = (Number.parseFloat(aValue) || 0) - (Number.parseFloat(bValue) || 0);
+  } else if (type === "date") {
+    result = (new Date(aValue).getTime() || 0) - (new Date(bValue).getTime() || 0);
+  } else {
+    result = aValue.localeCompare(bValue, undefined, { numeric: true, sensitivity: "base" });
+  }
+  return direction === "desc" ? -result : result;
+}
+
+function sortTable(table, button) {
+  const body = table.tBodies[0];
+  if (!body) return;
+  const key = button.dataset.sortKey;
+  const type = button.dataset.sortType || "text";
+  const direction = button.dataset.direction === "asc" ? "desc" : "asc";
+  sortableButtons(table).forEach((item) => {
+    delete item.dataset.direction;
+    item.closest("th")?.removeAttribute("aria-sort");
+  });
+  button.dataset.direction = direction;
+  button.closest("th")?.setAttribute("aria-sort", direction === "asc" ? "ascending" : "descending");
+  sortableRows(table)
+    .sort((a, b) => compareRows(a, b, key, type, direction))
+    .forEach((row) => {
+      body.appendChild(row);
+      const detailRow = attachedDetailRow(row);
+      if (detailRow) body.appendChild(detailRow);
+    });
+}
+
+function setupSortableTables() {
+  document.querySelectorAll("[data-sortable-table]").forEach((table) => {
+    sortableButtons(table).forEach((button) => {
+      button.addEventListener("click", () => sortTable(table, button));
+    });
+  });
+}
+
+function setupAutoSubmit() {
+  document.querySelectorAll("[data-auto-submit]").forEach((input) => {
+    input.addEventListener("change", () => input.form?.requestSubmit());
   });
 }
 
@@ -181,8 +259,11 @@ function setupLeaderboardSnake() {
   });
 }
 
+setupBrowserTimezone();
 formatUtcTimes();
 setupTableTools();
+setupSortableTables();
+setupAutoSubmit();
 setupExpandableRows();
 setupApiTest();
 setupLeaderboardSnake();

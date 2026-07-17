@@ -11,6 +11,11 @@ match IDs are the stable identity; kickoff, matchday, status, teams, and scores
 remain mutable. Missing source rows are reported rather than locally deleted.
 Score corrections invalidate derived score rows so they can be rebuilt.
 
+Kickoffs remain UTC in storage and API payloads. Browsers render each
+`time[data-utc]` value in their local timezone. The Today page sends that IANA
+timezone back as `tz`, allowing the server to select fixtures using the user's
+calendar date rather than the host or competition timezone.
+
 ## Live prediction and scoring
 
 Scheduled, resolved fixtures enter the prediction window 24 hours before
@@ -29,7 +34,7 @@ timer invokes the worker, which transitions one run through `running` to
 `completed` or `failed`. It combines actual completed scores with contestant
 predictions for all remaining resolved fixtures and builds a table ordered by
 points, goal difference, goals scored, then team name. Public requests are
-limited by the `Australia/Sydney` calendar day. Stale running jobs are failed
+limited by the competition's `Australia/Sydney` calendar day. Stale running jobs are failed
 after their activity lease expires, and incomplete simulations retain explicit
 omission details instead of silently presenting partial coverage as complete.
 

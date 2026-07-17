@@ -1,22 +1,105 @@
 {% extends "base.html" %}
-{% set title = "Today's EPL Fixtures" %}
+{% set title = "Today's Premier League Fixtures" %}
 {% block content %}
-<section class="page-head">
-  <div><p class="eyebrow">{{ display_timezone }}</p><h1>{% if is_today %}Today's Fixtures{% else %}Fixtures for {{ selected_date }}{% endif %}</h1></div>
-  <form method="get" class="inline-form"><input type="date" name="date" value="{{ selected_date }}"><button>Go</button></form>
+<section class="page-head" data-today-timezone="{{ today_games.timezone }}">
+  <div>
+    <h1>{% if today_games.is_today %}Today's Fixtures{% else %}Fixtures{% endif %}</h1>
+    <p>{{ today_games.date }} · {{ today_games.timezone }}</p>
+  </div>
+  <span class="pill">{{ today_games.fixtures|length }} fixtures</span>
 </section>
-<section class="card-grid">
-{% for fixture in today_fixtures %}
-  <article class="fixture-card">
-    <div class="fixture-meta"><span>Matchday {{ fixture.matchday or "—" }}</span><time data-utc="{{ fixture.kickoff_at }}">{{ fixture.kickoff_at }}</time></div>
-    <div class="fixture-teams"><strong>{{ display_team(fixture, "home") }}</strong><span class="score">{% if is_completed_fixture(fixture) %}{{ fixture.score_home }}–{{ fixture.score_away }}{% else %}vs{% endif %}</span><strong>{{ display_team(fixture, "away") }}</strong></div>
-    <span class="pill {{ fixture.status }}">{{ fixture.status|replace('_', ' ') }}</span>
-    <div class="tip-list compact">
-    {% for row in today_prediction_rows[fixture.match_id] %}
-      <div><span>{{ row.contestant.name }}</span>{% if row.hidden %}<span class="muted">Hidden</span>{% elif row.prediction %}<strong>{{ row.prediction.predicted_score_home }}–{{ row.prediction.predicted_score_away }}</strong>{% else %}<span class="muted">No tip</span>{% endif %}</div>
-    {% endfor %}
-    </div>
-  </article>
-{% else %}<div class="empty-state"><h2>No fixtures</h2><p>There are no Premier League fixtures on this date.</p></div>{% endfor %}
+
+<form class="toolbar today-date-tools" method="get" action="{{ app_path('/today') }}">
+  <a class="button secondary today-arrow" href="{{ app_path('/today?date=' ~ today_games.previous_date ~ '&tz=' ~ today_games.timezone) }}" aria-label="Previous day" title="Previous day">←</a>
+  <label>Day
+    <input type="date" name="date" value="{{ today_games.date }}" data-auto-submit>
+  </label>
+  <input type="hidden" name="tz" value="{{ today_games.timezone }}">
+  <a class="button secondary today-arrow" href="{{ app_path('/today?date=' ~ today_games.next_date ~ '&tz=' ~ today_games.timezone) }}" aria-label="Next day" title="Next day">→</a>
+  <div class="actions today-date-actions">
+    <button type="submit">Show</button>
+    {% if not today_games.is_today %}<a class="button secondary" href="{{ app_path('/today?tz=' ~ today_games.timezone) }}">Today</a>{% endif %}
+  </div>
+</form>
+
+<section class="table-wrap today-games">
+  <table id="today-table" data-sortable-table>
+    <thead>
+      <tr>
+        <th><button type="button" data-sort-key="matchday" data-sort-type="number">MD</button></th>
+        <th><button type="button" data-sort-key="kickoff" data-sort-type="date">Kickoff</button></th>
+        <th><button type="button" data-sort-key="home">Home</button></th>
+        <th><button type="button" data-sort-key="away">Away</button></th>
+        <th><button type="button" data-sort-key="result">Result</button></th>
+        <th><button type="button" data-sort-key="winner">Winner</button></th>
+        <th><button type="button" data-sort-key="status">Status</button></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for fixture in today_games.fixtures %}
+      {% set prediction_rows = today_prediction_rows[fixture.match_id] %}
+      <tr
+        class="fixture-row"
+        data-expandable-row
+        data-detail-row="today-fixture-predictions-{{ fixture.match_id }}"
+        data-sort-matchday="{{ fixture.matchday or 0 }}"
+        data-sort-kickoff="{{ fixture.kickoff_at or '' }}"
+        data-sort-home="{{ display_team(fixture, 'home') }}"
+        data-sort-away="{{ display_team(fixture, 'away') }}"
+        data-sort-result="{% if is_completed_fixture(fixture) %}{{ fixture.score_home }}-{{ fixture.score_away }}{% endif %}"
+        data-sort-winner="{{ fixture.winner or '' }}"
+        data-sort-status="{{ fixture.status }}"
+        tabindex="0"
+      >
+        <td class="fixture-number-cell">
+          <button class="fixture-toggle" type="button" data-fixture-toggle aria-expanded="false" aria-controls="today-fixture-predictions-{{ fixture.match_id }}">
+            <span class="fixture-arrow" aria-hidden="true"></span>
+            <span class="sr-only">Show predictions for matchday {{ fixture.matchday or 'unknown' }}</span>
+          </button>
+          <span>{{ fixture.matchday or "—" }}</span>
+        </td>
+        <td><time data-utc="{{ fixture.kickoff_at or '' }}">{{ fixture.kickoff_at or "TBC" }}</time></td>
+        <td><strong>{{ display_team(fixture, "home") }}</strong></td>
+        <td><strong>{{ display_team(fixture, "away") }}</strong></td>
+        <td>{% if is_completed_fixture(fixture) %}<span class="score">{{ fixture.score_home }}–{{ fixture.score_away }}</span>{% else %}<span class="muted">Pending</span>{% endif %}</td>
+        <td>{% if is_completed_fixture(fixture) %}{{ fixture.winner or "Draw" }}{% else %}<span class="muted">TBD</span>{% endif %}</td>
+        <td><span class="pill {{ fixture.status }}">{{ fixture.status|replace('_', ' ') }}</span></td>
+      </tr>
+      <tr id="today-fixture-predictions-{{ fixture.match_id }}" class="fixture-prediction-row" hidden>
+        <td colspan="7">
+          <div class="fixture-predictions">
+            <div class="fixture-predictions-head">
+              <div><strong>Predictions</strong> <span class="muted">{{ display_team(fixture, 'home') }} vs {{ display_team(fixture, 'away') }}</span></div>
+              {% if prediction_rows and prediction_rows[0].hidden %}
+                <span class="pill">Hidden until lock</span>
+              {% else %}
+                <span class="pill">{{ prediction_rows|selectattr('prediction_record')|list|length }} / {{ prediction_rows|length }} submitted</span>
+              {% endif %}
+            </div>
+            <div class="fixture-prediction-scroll">
+              <table class="mini-table fixture-prediction-table">
+                <thead><tr><th>Contestant</th><th>Status</th><th>Prediction</th><th>Pick</th><th>Confidence</th><th>Response</th><th>Outcome</th><th>Points</th></tr></thead>
+                <tbody>
+                {% for row in prediction_rows %}
+                  <tr>
+                    <td><a href="{{ app_path('/leaderboard/' ~ row.contestant.id) }}"><strong>{{ row.contestant.name }}</strong></a></td>
+                    <td><span class="pill">{{ row.contestant.status }}</span></td>
+                    <td>{% if row.hidden %}<span class="muted">Hidden until lock</span>{% elif row.prediction %}<span class="score">{{ row.prediction.predicted_score_home }}–{{ row.prediction.predicted_score_away }}</span>{% elif row.prediction_record and not row.prediction_record.valid %}<span class="error">Invalid response</span>{% else %}<span class="muted">No prediction</span>{% endif %}</td>
+                    <td>{% if row.hidden or not row.prediction %}<span class="muted">—</span>{% elif row.prediction.predicted_score_home > row.prediction.predicted_score_away %}{{ display_team(fixture, 'home') }}{% elif row.prediction.predicted_score_away > row.prediction.predicted_score_home %}{{ display_team(fixture, 'away') }}{% else %}Draw{% endif %}</td>
+                    <td>{% if not row.hidden and row.prediction and row.prediction.confidence is not none %}{{ "%.0f"|format(row.prediction.confidence * 100) }}%{% else %}<span class="muted">Not set</span>{% endif %}</td>
+                    <td>{% if row.hidden %}<span class="muted">Private</span>{% elif row.prediction_record and row.prediction_record.valid %}<span class="pill completed">valid</span>{% elif row.prediction_record %}<span class="pill warning">invalid</span>{% if row.prediction_record.error %}<span class="fixture-error">{{ row.prediction_record.error }}</span>{% endif %}{% else %}<span class="muted">No response</span>{% endif %}</td>
+                    <td>{% if row.score %}<span class="pill">{{ row.score.reason|replace('_', ' ') }}</span>{% else %}<span class="muted">Unscored</span>{% endif %}</td>
+                    <td>{% if row.score %}<strong>{{ "%.1f"|format(row.score.points) }}</strong>{% else %}<span class="muted">—</span>{% endif %}</td>
+                  </tr>
+                {% else %}<tr><td colspan="8" class="empty">No contestants registered.</td></tr>{% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </td>
+      </tr>
+      {% else %}<tr><td colspan="7" class="empty">No Premier League fixtures on this date.</td></tr>{% endfor %}
+    </tbody>
+  </table>
 </section>
 {% endblock %}

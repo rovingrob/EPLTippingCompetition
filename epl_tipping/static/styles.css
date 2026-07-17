@@ -61,9 +61,18 @@ textarea { min-height: 420px; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo
 .inline-form select, .inline-form input { width: auto; min-width: 200px; }
 .table-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
 .toolbar + .table-wrap { border-top: 0; border-radius: 0 0 12px 12px; }
+.today-date-tools { align-items: end; }
+.today-date-tools label { min-width: 210px; }
+.today-date-actions { margin-left: auto; }
+.today-arrow { font-size: 1.15rem; min-height: 42px; min-width: 42px; padding: 0.55rem 0.75rem; }
+.today-games { margin-bottom: 1.5rem; }
 table { width: 100%; border-collapse: collapse; }
 th, td { border-bottom: 1px solid var(--line); padding: 0.72rem 0.8rem; text-align: left; vertical-align: top; white-space: nowrap; }
 th { background: #edf2ee; color: #536057; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; }
+th button[data-sort-key] { background: transparent; color: inherit; font-size: inherit; letter-spacing: inherit; padding: 0; text-transform: inherit; }
+th button[data-sort-key]:hover { background: transparent; color: var(--green-dark); text-decoration: underline; }
+th button[data-direction="asc"]::after { content: " ↑"; }
+th button[data-direction="desc"]::after { content: " ↓"; }
 tbody tr:last-child td { border-bottom: 0; }
 tbody tr:hover { background: #f7faf7; }
 tr.europe td:first-child { border-left: 4px solid var(--blue); }
@@ -89,6 +98,8 @@ tr.relegation td:first-child { border-left: 4px solid var(--red); }
 .tip-list.compact { margin-top: 0.8rem; min-width: 0; }
 details summary { cursor: pointer; color: var(--green); font-weight: 700; }
 .fixture-row { cursor: pointer; }
+.fixture-number-cell { white-space: nowrap; }
+.sr-only { clip: rect(0, 0, 0, 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
 .fixture-row:focus-visible { outline: 3px solid #b7d9c3; outline-offset: -3px; }
 .fixture-row.is-expanded { background: #edf7f0; }
 .fixture-toggle { align-items: center; background: transparent; border: 0; color: var(--green); display: inline-flex; gap: 0.4rem; padding: 0.25rem 0.2rem; white-space: nowrap; }

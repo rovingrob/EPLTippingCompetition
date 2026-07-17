@@ -21,7 +21,9 @@ Public pages live below `/tipping/`.
 - Admin-entered results are explicit overrides and are not replaced by source
   synchronisation until the override is cleared.
 
-Kickoffs are stored in UTC and displayed in `Australia/Sydney` by default.
+Kickoffs are stored in UTC and rendered in each user's browser timezone. The
+Today page also uses that timezone to decide which fixtures belong to the
+selected date. Competition-wide daily limits use `Australia/Sydney` by default.
 
 ## Contestant API v1
 
@@ -78,7 +80,7 @@ uv sync
 FOOTBALL_DATA_TOKEN=<your football-data.org token>
 TIPPING_COMPETITION_CODE=PL
 TIPPING_SEASON=2026
-TIPPING_DISPLAY_TIMEZONE=Australia/Sydney
+TIPPING_COMPETITION_TIMEZONE=Australia/Sydney
 ADMIN_TOKEN=local-dev-admin-token
 ADMIN_COOKIE_SECRET=use-a-different-long-random-value
 ADMIN_COOKIE_SECURE=false

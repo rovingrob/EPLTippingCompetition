@@ -490,8 +490,8 @@ def _recover_stale_runs(runs: list[dict[str, Any]], now: datetime) -> int:
     return recovered
 
 
-def _display_timezone() -> ZoneInfo:
-    name = os.getenv("TIPPING_DISPLAY_TIMEZONE", "Australia/Sydney").strip() or "Australia/Sydney"
+def _competition_timezone() -> ZoneInfo:
+    name = os.getenv("TIPPING_COMPETITION_TIMEZONE", "Australia/Sydney").strip() or "Australia/Sydney"
     try:
         return ZoneInfo(name)
     except ZoneInfoNotFoundError:
@@ -499,7 +499,7 @@ def _display_timezone() -> ZoneInfo:
 
 
 def _local_date(value: datetime) -> str:
-    return value.astimezone(_display_timezone()).date().isoformat()
+    return value.astimezone(_competition_timezone()).date().isoformat()
 
 
 def _date_from_iso(value: Any) -> str | None:

@@ -6,7 +6,7 @@ import hmac
 import json
 import os
 import re
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -51,7 +51,7 @@ from .storage import get_store
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 BASE_PATH = "/tipping"
-DEFAULT_DISPLAY_TIMEZONE = "Australia/Sydney"
+DEFAULT_COMPETITION_TIMEZONE = "Australia/Sydney"
 DEFAULT_LOCK_MINUTES = 30
 
 app = FastAPI(title="EPL Tipping Competition")
@@ -185,12 +185,25 @@ def redirect_to_admin(message: str | None = None) -> RedirectResponse:
     return RedirectResponse(f"{app_path('/admin')}{suffix}", status_code=303)
 
 
-def display_timezone() -> ZoneInfo:
-    name = os.getenv("TIPPING_DISPLAY_TIMEZONE", DEFAULT_DISPLAY_TIMEZONE).strip() or DEFAULT_DISPLAY_TIMEZONE
+def competition_timezone() -> ZoneInfo:
+    name = (
+        os.getenv("TIPPING_COMPETITION_TIMEZONE", DEFAULT_COMPETITION_TIMEZONE).strip()
+        or DEFAULT_COMPETITION_TIMEZONE
+    )
     try:
         return ZoneInfo(name)
     except ZoneInfoNotFoundError:
         return ZoneInfo("UTC")
+
+
+def user_timezone(name: str | None) -> ZoneInfo:
+    candidate = (name or "").strip()
+    if not candidate or len(candidate) > 100:
+        return competition_timezone()
+    try:
+        return ZoneInfo(candidate)
+    except (ValueError, ZoneInfoNotFoundError):
+        return competition_timezone()
 
 
 def load_context(request: Request) -> dict[str, Any]:
@@ -226,7 +239,7 @@ def load_context(request: Request) -> dict[str, Any]:
         "is_admin": admin,
         "admin_auth_configured": admin_auth_configured(),
         "message": request.query_params.get("message"),
-        "display_timezone": getattr(display_timezone(), "key", "UTC"),
+        "competition_timezone": getattr(competition_timezone(), "key", "UTC"),
     }
 
 
@@ -294,8 +307,11 @@ def contestant_rows(
     return rows
 
 
-def fixtures_for_date(fixtures: list[dict[str, Any]], target: date) -> list[dict[str, Any]]:
-    timezone = display_timezone()
+def fixtures_for_date(
+    fixtures: list[dict[str, Any]],
+    target: date,
+    timezone: ZoneInfo,
+) -> list[dict[str, Any]]:
     result = []
     for fixture in fixtures:
         kickoff = fixture.get("kickoff_at")
@@ -325,19 +341,32 @@ def schedule_page(request: Request):
 
 
 @router.get("/today")
-def today_page(request: Request, selected_date: str | None = Query(default=None, alias="date")):
+def today_page(
+    request: Request,
+    selected_date: str | None = Query(default=None, alias="date"),
+    timezone_name: str | None = Query(default=None, alias="tz"),
+):
     context = load_context(request)
-    today = utc_now().astimezone(display_timezone()).date()
+    timezone = user_timezone(timezone_name)
+    today = utc_now().astimezone(timezone).date()
     try:
         target = date.fromisoformat(selected_date) if selected_date else today
     except ValueError:
         target = today
-    fixtures = fixtures_for_date(context["fixtures"], target)
+    fixtures = fixtures_for_date(context["fixtures"], target, timezone)
     context.update(
-        selected_date=target.isoformat(),
-        is_today=target == today,
-        today_fixtures=fixtures,
-        today_prediction_rows={fixture["match_id"]: context["fixture_prediction_rows"][fixture["match_id"]] for fixture in fixtures},
+        today_games={
+            "date": target.isoformat(),
+            "is_today": target == today,
+            "previous_date": (target - timedelta(days=1)).isoformat(),
+            "next_date": (target + timedelta(days=1)).isoformat(),
+            "timezone": getattr(timezone, "key", "UTC"),
+            "fixtures": fixtures,
+        },
+        today_prediction_rows={
+            fixture["match_id"]: context["fixture_prediction_rows"][fixture["match_id"]]
+            for fixture in fixtures
+        },
     )
     return templates.TemplateResponse(request, "today.html", context)
 

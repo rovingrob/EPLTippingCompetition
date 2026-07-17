@@ -2,12 +2,12 @@
 set -euo pipefail
 
 SOURCE_DIR="${SOURCE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-APP_DIR="${APP_DIR:-/opt/world-cup-tipping}"
-SERVICE_NAME="${SERVICE_NAME:-world-cup-tipping}"
+APP_DIR="${APP_DIR:-/opt/epl-tipping}"
+SERVICE_NAME="${SERVICE_NAME:-epl-tipping}"
 SERVICE_USER="${SERVICE_USER:-${SUDO_USER:-$(id -un)}}"
 SERVICE_GROUP="${SERVICE_GROUP:-$(id -gn "$SERVICE_USER")}"
-DATA_DIR="${DATA_DIR:-/var/lib/world-cup-tipping/data}"
-ENV_FILE="${ENV_FILE:-/etc/world-cup-tipping.env}"
+DATA_DIR="${DATA_DIR:-/var/lib/epl-tipping/data}"
+ENV_FILE="${ENV_FILE:-/etc/epl-tipping.env}"
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8000}"
 START_NOW="${START_NOW:-0}"
@@ -56,6 +56,8 @@ if [ "$APP_DIR" != "$SOURCE_DIR" ]; then
   if command -v rsync >/dev/null 2>&1; then
     run_root rsync -a --delete \
       --exclude .venv \
+      --exclude .env \
+      --exclude '.env.*' \
       --exclude .pytest_cache \
       --exclude __pycache__ \
       --exclude '*.pyc' \
@@ -64,6 +66,8 @@ if [ "$APP_DIR" != "$SOURCE_DIR" ]; then
     tmp_archive="$(mktemp)"
     tar \
       --exclude ./.venv \
+      --exclude ./.env \
+      --exclude './.env.*' \
       --exclude ./.pytest_cache \
       --exclude '*/__pycache__' \
       --exclude '*.pyc' \
@@ -89,7 +93,7 @@ fi
 
 run_root install -d -m 750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$DATA_DIR"
 
-for filename in fixtures.json groups.json registry.json predictions.json scores.json run_log.json simulations.json simulation_runs.json; do
+for filename in fixtures.json registry.json predictions.json scores.json run_log.json source_state.json season_projections.json projection_runs.json; do
   if [ -f "$APP_DIR/data/$filename" ] && [ ! -f "$DATA_DIR/$filename" ]; then
     run_root install -m 600 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$APP_DIR/data/$filename" "$DATA_DIR/$filename"
   fi
@@ -103,9 +107,14 @@ ADMIN_TOKEN=$admin_token
 ADMIN_COOKIE_SECRET=$cookie_secret
 ADMIN_COOKIE_SECURE=true
 ADMIN_COOKIE_TTL_SECONDS=86400
-WCT_DATA_DIR=$DATA_DIR
-WCT_ALLOWED_HOSTS=
-WCT_ENABLE_HSTS=true
+FOOTBALL_DATA_TOKEN=replace-with-your-server-only-api-token
+FOOTBALL_DATA_BASE_URL=https://api.football-data.org/v4
+TIPPING_COMPETITION_CODE=PL
+TIPPING_SEASON=2026
+TIPPING_DATA_DIR=$DATA_DIR
+TIPPING_DISPLAY_TIMEZONE=Australia/Sydney
+TIPPING_ALLOWED_HOSTS=
+TIPPING_ENABLE_HSTS=true
 EOF
   echo "Created $ENV_FILE with generated secrets."
 else
@@ -114,7 +123,7 @@ fi
 
 write_root_file 644 "/etc/systemd/system/$SERVICE_NAME.service" <<EOF
 [Unit]
-Description=World Cup Tipping FastAPI app
+Description=EPL Tipping FastAPI app
 After=network-online.target
 Wants=network-online.target
 
@@ -125,7 +134,7 @@ Group=$SERVICE_GROUP
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$ENV_FILE
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=$UVICORN_BIN world_cup_tipping.main:app --host $HOST --port $PORT --proxy-headers --forwarded-allow-ips=127.0.0.1
+ExecStart=$UVICORN_BIN epl_tipping.main:app --host $HOST --port $PORT --proxy-headers --forwarded-allow-ips=127.0.0.1
 Restart=on-failure
 RestartSec=5
 UMask=0077
@@ -145,7 +154,7 @@ EOF
 
 write_root_file 644 "/etc/systemd/system/$SERVICE_NAME-cron.service" <<EOF
 [Unit]
-Description=World Cup Tipping due workflow
+Description=EPL Tipping due workflow
 After=network-online.target
 Wants=network-online.target
 
@@ -156,7 +165,7 @@ Group=$SERVICE_GROUP
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$ENV_FILE
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=$PYTHON_BIN -m world_cup_tipping.cron run-due --data-dir $DATA_DIR --lookahead-hours 24
+ExecStart=$PYTHON_BIN -m epl_tipping.cron run-due --data-dir $DATA_DIR --lookahead-hours 24 --lock-minutes 30
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
@@ -171,7 +180,7 @@ EOF
 
 write_root_file 644 "/etc/systemd/system/$SERVICE_NAME-cron.timer" <<EOF
 [Unit]
-Description=Run World Cup Tipping due workflow every 4 hours
+Description=Run EPL Tipping due workflow every 4 hours
 
 [Timer]
 OnBootSec=2min
@@ -184,13 +193,53 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
+write_root_file 644 "/etc/systemd/system/$SERVICE_NAME-projection.service" <<EOF
+[Unit]
+Description=EPL Tipping queued projection worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=$SERVICE_USER
+Group=$SERVICE_GROUP
+WorkingDirectory=$APP_DIR
+EnvironmentFile=$ENV_FILE
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=$PYTHON_BIN -m epl_tipping.cron process-projection --data-dir $DATA_DIR --timeout-seconds 15 --retries 1 --concurrency 5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=$DATA_DIR
+CapabilityBoundingSet=
+AmbientCapabilities=
+LockPersonality=true
+RestrictSUIDSGID=true
+EOF
+
+write_root_file 644 "/etc/systemd/system/$SERVICE_NAME-projection.timer" <<EOF
+[Unit]
+Description=Poll the EPL Tipping projection queue
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
 run_root systemctl daemon-reload
 
 if [ "$START_NOW" = "1" ]; then
-  run_root systemctl enable --now "$SERVICE_NAME.service" "$SERVICE_NAME-cron.timer"
-  echo "Started $SERVICE_NAME.service and $SERVICE_NAME-cron.timer."
+  run_root systemctl enable --now "$SERVICE_NAME.service" "$SERVICE_NAME-cron.timer" "$SERVICE_NAME-projection.timer"
+  echo "Started $SERVICE_NAME.service, $SERVICE_NAME-cron.timer, and $SERVICE_NAME-projection.timer."
 else
   echo "Installed systemd units without starting them."
   echo "Start later with:"
-  echo "  sudo systemctl enable --now $SERVICE_NAME.service $SERVICE_NAME-cron.timer"
+  echo "  sudo systemctl enable --now $SERVICE_NAME.service $SERVICE_NAME-cron.timer $SERVICE_NAME-projection.timer"
 fi

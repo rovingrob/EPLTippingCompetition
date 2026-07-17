@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% set title = contestant.name ~ " API Test" %}
+{% block content %}
+<section class="page-head"><div><p class="eyebrow">Contract v1</p><h1>{{ contestant.name }} API Test</h1><p>The browser posts this fixture-only payload directly to {{ contestant.url }}.</p></div><a class="button secondary" href="{{ app_path('/leaderboard/' ~ contestant.id) }}">Back</a></section>
+<section class="split" data-api-test data-endpoint-url="{{ contestant.url }}">
+  <article class="panel"><h2>Request</h2><textarea data-api-test-payload spellcheck="false">{{ payload_text }}</textarea><button data-api-test-send>Send POST</button></article>
+  <article class="panel"><h2>Result</h2><div><span class="pill" data-api-test-status>idle</span> <span data-api-test-http></span></div><pre data-api-test-validation>No request sent.</pre><pre data-api-test-json>No response.</pre><div class="error" data-api-test-error hidden></div></article>
+</section>
+{% endblock %}

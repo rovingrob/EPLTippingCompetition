@@ -1,192 +1,141 @@
-from world_cup_tipping.scoring import leaderboard_snake, score_prediction, validate_prediction
+from __future__ import annotations
+
+import pytest
+
+from epl_tipping.scoring import (
+    leaderboard,
+    score_completed_matches,
+    score_prediction,
+    validate_prediction,
+)
 
 
-def fixture(stage: str = "group", score_a: int = 2, score_b: int = 1, winner: str | None = "Mexico") -> dict:
-    return {
-        "match_id": "2026-001",
-        "stage": stage,
-        "team_a": "Mexico",
-        "team_b": "South Africa",
-        "score_a": score_a,
-        "score_b": score_b,
-        "winner": winner,
-    }
+def prediction(home: int, away: int, confidence: float | None = 0.7) -> dict:
+    result = {"predicted_score_home": home, "predicted_score_away": away}
+    if confidence is not None:
+        result["confidence"] = confidence
+    return result
 
 
-def prediction(score_a: int, score_b: int, winner: str | None = "Mexico") -> dict:
-    return {
-        "predicted_score_a": score_a,
-        "predicted_score_b": score_b,
-        "predicted_winner": winner,
-        "confidence": 0.7,
-    }
-
-
-def test_exact_score_is_one_and_half_points() -> None:
-    points, reason = score_prediction(fixture(), prediction(2, 1))
-    assert points == 1.5
-    assert reason == "exact_score"
-
-
-def test_correct_result_is_one_point() -> None:
-    points, reason = score_prediction(fixture(), prediction(1, 0))
-    assert points == 1.0
-    assert reason == "correct_result"
-
-
-def test_correct_draw_result_is_one_point() -> None:
-    draw_fixture = fixture()
-    draw_fixture["score_a"] = 0
-    draw_fixture["score_b"] = 0
-    points, reason = score_prediction(draw_fixture, prediction(1, 1, None))
-    assert points == 1.0
-    assert reason == "correct_result"
-
-
-def test_group_stage_draw_prediction_ignores_supplied_winner_for_scoring() -> None:
-    draw_fixture = fixture(score_a=0, score_b=0, winner=None)
-    points, reason = score_prediction(draw_fixture, prediction(1, 1, "Mexico"))
-    assert points == 1.0
-    assert reason == "correct_result"
-
-
-def test_group_stage_draw_prediction_with_winner_does_not_score_as_winner() -> None:
-    points, reason = score_prediction(fixture(score_a=1, score_b=0), prediction(1, 1, "Mexico"))
-    assert points == 0.0
-    assert reason == "incorrect_result"
-
-
-def test_incorrect_result_is_zero_points() -> None:
-    points, reason = score_prediction(fixture(), prediction(0, 1, "South Africa"))
-    assert points == 0.0
-    assert reason == "incorrect_result"
-
-
-def test_invalid_prediction_schema_rejected() -> None:
-    valid, normalized, error = validate_prediction(fixture(), {"predicted_score_a": -1})
-    assert valid is False
-    assert normalized is None
-    assert error
-
-
-def test_confidence_is_optional() -> None:
-    valid, normalized, error = validate_prediction(
-        fixture(),
-        {
-            "predicted_score_a": 2,
-            "predicted_score_b": 1,
-            "predicted_winner": "Mexico",
-        },
-    )
+def test_validation_normalizes_valid_prediction_and_optional_confidence(make_fixture) -> None:
+    valid, normalized, error = validate_prediction(make_fixture(), prediction(2, 1))
     assert valid is True
-    assert normalized["confidence"] is None
+    assert normalized == {"predicted_score_home": 2, "predicted_score_away": 1, "confidence": 0.7}
+    assert error is None
+
+    valid, normalized, error = validate_prediction(make_fixture(), prediction(0, 0, confidence=None))
+    assert valid is True
+    assert normalized == {"predicted_score_home": 0, "predicted_score_away": 0, "confidence": None}
     assert error is None
 
 
-def test_confidence_is_validated_when_supplied() -> None:
-    valid, normalized, error = validate_prediction(fixture(), prediction(2, 1) | {"confidence": 1.5})
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ({"predicted_score_away": 1}, "Missing field: predicted_score_home"),
+        ({"predicted_score_home": 1}, "Missing field: predicted_score_away"),
+        (prediction(True, 1), "integers"),
+        (prediction(1.5, 1), "integers"),
+        (prediction(-1, 0), "non-negative"),
+        (prediction(1, 0, confidence=True), "number"),
+        (prediction(1, 0, confidence=1.01), "between 0 and 1"),
+    ],
+)
+def test_validation_rejects_bad_prediction_payloads(make_fixture, payload, message: str) -> None:
+    valid, normalized, error = validate_prediction(make_fixture(), payload)
     assert valid is False
     assert normalized is None
-    assert "Confidence" in error
+    assert message in error
 
 
-def test_group_stage_draw_prediction_normalizes_winner_to_draw() -> None:
-    valid, normalized, error = validate_prediction(fixture(), prediction(1, 1, "Mexico"))
-    assert valid is True
-    assert normalized["predicted_winner"] is None
-    assert error is None
+@pytest.mark.parametrize(
+    ("predicted_home", "predicted_away", "points", "reason"),
+    [
+        (2, 1, 1.5, "exact_score"),
+        (1, 0, 1.0, "correct_result"),
+        (3, 3, 0.0, "incorrect_result"),
+        (0, 2, 0.0, "incorrect_result"),
+    ],
+)
+def test_scoring_uses_exact_score_then_three_way_result(
+    make_fixture,
+    predicted_home: int,
+    predicted_away: int,
+    points: float,
+    reason: str,
+) -> None:
+    fixture = make_fixture(status="completed", score_home=2, score_away=1)
+    assert score_prediction(fixture, prediction(predicted_home, predicted_away)) == (points, reason)
 
 
-def test_knockout_draw_requires_winner() -> None:
-    knockout = fixture("round_of_16")
-    valid, normalized, error = validate_prediction(knockout, prediction(1, 1, None))
-    assert valid is False
-    assert normalized is None
-    assert "winner" in error
+def test_correct_draw_scores_one_point(make_fixture) -> None:
+    fixture = make_fixture(status="completed", score_home=1, score_away=1)
+    assert score_prediction(fixture, prediction(2, 2)) == (1.0, "correct_result")
 
 
-def test_knockout_stage_points_increase_by_round() -> None:
-    stage_points = {
-        "round_of_32": 1.0,
-        "round_of_16": 2.0,
-        "quarterfinal": 3.0,
-        "semifinal": 4.0,
-        "third_place": 5.0,
-        "final": 6.0,
-    }
-    for stage, expected_points in stage_points.items():
-        points, reason = score_prediction(fixture(stage, score_a=2, score_b=0), prediction(2, 1))
-        assert points == expected_points
-        assert reason == "correct_result"
+def test_missing_invalid_and_unfinished_predictions_score_zero(make_fixture) -> None:
+    assert score_prediction(make_fixture(), prediction(2, 1)) == (0.0, "fixture_not_completed")
+    fixture = make_fixture(status="completed", score_home=2, score_away=1)
+    assert score_prediction(fixture, None) == (0.0, "invalid_or_missing")
+    assert score_prediction(fixture, prediction(2, 1), valid=False) == (0.0, "invalid_or_missing")
 
 
-def test_knockout_exact_score_adds_half_point() -> None:
-    points, reason = score_prediction(fixture("round_of_16", score_a=1, score_b=0), prediction(1, 0))
-    assert points == 2.5
-    assert reason == "exact_score"
-
-
-def test_knockout_wrong_result_is_zero_points() -> None:
-    points, reason = score_prediction(fixture("semifinal", score_a=1, score_b=0), prediction(0, 1, "South Africa"))
-    assert points == 0.0
-    assert reason == "incorrect_result"
-
-
-def test_knockout_drawn_exact_score_only_gets_exact_bonus() -> None:
-    points, reason = score_prediction(
-        fixture("round_of_16", score_a=1, score_b=1, winner="Mexico"),
-        prediction(1, 1, "South Africa"),
-    )
-    assert points == 0.5
-    assert reason == "exact_score"
-
-
-def test_leaderboard_snake_tracks_places_and_tied_ranks_over_matches() -> None:
+def test_score_completed_matches_covers_missing_invalid_and_inactive_predictors(make_fixture) -> None:
+    fixtures = [make_fixture(status="completed", score_home=2, score_away=1)]
     registry = [
         {"id": "alpha", "name": "Alpha", "status": "active"},
         {"id": "bravo", "name": "Bravo", "status": "active"},
-        {"id": "charlie", "name": "Charlie", "status": "active"},
+        {"id": "retired", "name": "Retired", "status": "inactive"},
+        {"id": "never-entered", "name": "Never", "status": "inactive"},
     ]
-    fixtures = [
-        {"match_id": "2026-001", "match_number": 1, "stage": "group"},
-        {"match_id": "2026-002", "match_number": 2, "stage": "group"},
-        {"match_id": "2026-003", "match_number": 3, "stage": "group"},
+    predictions = [
+        {
+            "contestant_id": "alpha",
+            "match_id": "fd-1001",
+            "valid": True,
+            "prediction": prediction(2, 1),
+        },
+        {
+            "contestant_id": "retired",
+            "match_id": "fd-1001",
+            "valid": False,
+            "prediction": None,
+        },
+    ]
+
+    scores = score_completed_matches(fixtures, registry, predictions, [])
+    by_contestant = {row["contestant_id"]: row for row in scores}
+
+    assert set(by_contestant) == {"alpha", "bravo", "retired"}
+    assert (by_contestant["alpha"]["points"], by_contestant["alpha"]["reason"]) == (1.5, "exact_score")
+    assert (by_contestant["bravo"]["points"], by_contestant["bravo"]["reason"]) == (0.0, "missing_prediction")
+    assert (by_contestant["retired"]["points"], by_contestant["retired"]["reason"]) == (
+        0.0,
+        "invalid_or_missing",
+    )
+    assert score_completed_matches(fixtures, registry, predictions, scores) == scores
+
+
+def test_leaderboard_aggregates_orders_and_assigns_competition_ranks() -> None:
+    registry = [
+        {"id": "bravo", "name": "Bravo", "status": "active"},
+        {"id": "alpha", "name": "Alpha", "status": "active"},
+        {"id": "charlie", "name": "Charlie", "status": "inactive"},
     ]
     scores = [
-        {"contestant_id": "alpha", "match_id": "2026-001", "points": 1.0},
-        {"contestant_id": "bravo", "match_id": "2026-001", "points": 0.0},
-        {"contestant_id": "charlie", "match_id": "2026-001", "points": 1.5},
-        {"contestant_id": "alpha", "match_id": "2026-002", "points": 1.0},
-        {"contestant_id": "bravo", "match_id": "2026-002", "points": 2.0},
-        {"contestant_id": "charlie", "match_id": "2026-002", "points": 0.0},
+        {"contestant_id": "alpha", "match_id": "fd-1", "points": 1.5, "reason": "exact_score"},
+        {"contestant_id": "alpha", "match_id": "fd-2", "points": 0.5, "reason": "correct_result"},
+        {"contestant_id": "bravo", "match_id": "fd-1", "points": 1.0, "reason": "correct_result"},
+        {"contestant_id": "bravo", "match_id": "fd-2", "points": 1.0, "reason": "correct_result"},
+        {"contestant_id": "charlie", "match_id": "fd-1", "points": 1.5, "reason": "exact_score"},
+        {"contestant_id": "orphan", "match_id": "fd-1", "points": 0.0, "reason": "incorrect_result"},
     ]
 
-    snake = leaderboard_snake(registry, fixtures, scores)
-    rows = {row["contestant_id"]: row for row in snake["contestants"]}
+    table = leaderboard(registry, scores)
 
-    assert [checkpoint["short_label"] for checkpoint in snake["checkpoints"]] == ["Start", "M1", "M2", "M3"]
-    assert [point["place"] for point in rows["alpha"]["history"]] == [1, 2, 1]
-    assert [point["place"] for point in rows["bravo"]["history"]] == [2, 3, 2]
-    assert [point["place"] for point in rows["charlie"]["history"]] == [3, 1, 3]
-    assert rows["alpha"]["current_rank"] == 1
-    assert rows["bravo"]["current_rank"] == 1
-    assert rows["charlie"]["current_rank"] == 3
-    assert rows["alpha"]["last_move_label"] == "up 1"
-    assert rows["charlie"]["last_move_label"] == "down 2"
-    assert rows["alpha"]["current"]["y"] == rows["bravo"]["current"]["y"]
-    assert rows["alpha"]["current"]["y"] < rows["charlie"]["current"]["y"]
-    y_span = snake["chart"]["height"] - snake["chart"]["plot_top"] - snake["chart"]["plot_bottom"]
-    linear_gap = (
-        (rows["alpha"]["current_points"] - rows["charlie"]["current_points"])
-        / snake["point_guides"][-1]["value"]
-        * y_span
-    )
-    assert rows["charlie"]["current"]["y"] - rows["alpha"]["current"]["y"] > linear_gap
-    assert rows["alpha"]["current"]["label_x"] > rows["alpha"]["current"]["x"]
-    assert rows["bravo"]["current"]["label_x"] > rows["alpha"]["current"]["label_x"]
-    assert rows["alpha"]["current"]["show_label_stem"] is True
-    assert rows["bravo"]["current"]["show_label_stem"] is False
-    assert snake["point_guides"][0]["label"] == "0"
-    assert snake["remaining_count"] == 1
-    assert snake["future_zone"]["label"] == "1 games left / 1.5 pts available"
-    assert snake["chart"]["plot_right"] >= 150
+    assert [row["contestant_id"] for row in table] == ["alpha", "bravo", "charlie", "orphan"]
+    assert [row["rank"] for row in table] == [1, 1, 3, 4]
+    assert table[0]["total_points"] == 2.0
+    assert table[0]["exact_scores"] == 1
+    assert table[2]["status"] == "inactive"
+    assert table[3]["status"] == "unknown"

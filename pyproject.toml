@@ -1,13 +1,14 @@
 [project]
-name = "world-cup-tipping"
+name = "epl-tipping"
 version = "0.1.0"
-description = "JSON-only FastAPI app for a FIFA World Cup tipping competition."
+description = "English Premier League prediction-bot tipping competition powered by football-data.org."
 requires-python = ">=3.12"
 dependencies = [
   "cryptography>=48.0.0",
   "fastapi",
   "httpx",
   "jinja2",
+  "python-dotenv",
   "python-multipart",
   "uvicorn[standard]",
 ]

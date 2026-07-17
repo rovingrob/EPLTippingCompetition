@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% set title = "EPL Leaderboard" %}
+{% block content %}
+<section class="page-head"><div><p class="eyebrow">Bot competition</p><h1>Leaderboard</h1><p>One point for the correct result; 1.5 points total for an exact score.</p></div></section>
+<section class="table-wrap">
+<table>
+  <thead><tr><th>Rank</th><th>Contestant</th><th>Status</th><th>Scored</th><th>Exact</th><th>Points</th><th>Tools</th></tr></thead>
+  <tbody>
+  {% for row in leaderboard %}
+    <tr><td><span class="rank">{{ row.rank }}</span></td><td><a href="{{ app_path('/leaderboard/' ~ row.contestant_id) }}"><strong>{{ row.name }}</strong></a></td><td><span class="pill">{{ row.status }}</span></td><td>{{ row.scored_matches }}</td><td>{{ row.exact_scores }}</td><td><strong>{{ "%.1f"|format(row.total_points) }}</strong></td>
+      <td><div class="actions"><a class="button small secondary" href="{{ app_path('/leaderboard/' ~ row.contestant_id ~ '/tips') }}">Tips</a>{% if is_admin %}<a class="button small secondary" href="{{ app_path('/leaderboard/' ~ row.contestant_id ~ '/api-test') }}">Test</a>{% endif %}<a class="button small" href="{{ app_path('/leaderboard/' ~ row.contestant_id ~ '/projection') }}">Projection</a></div></td></tr>
+  {% else %}<tr><td colspan="7" class="empty">No contestants yet.</td></tr>{% endfor %}
+  </tbody>
+</table>
+</section>
+{% endblock %}

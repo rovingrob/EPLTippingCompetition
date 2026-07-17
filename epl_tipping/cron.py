@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .football_data import FootballDataConfig, sync_matches_once
 from .runner import RunnerConfig, run_due_once
-from .simulation import SimulationConfig, process_next_projection
+from .simulation import SimulationConfig, process_next_simulation
 from .storage import get_store
 
 
@@ -48,15 +48,14 @@ def main() -> None:
     sync_parser.add_argument("--dry-run", action="store_true")
     add_source_args(sync_parser)
 
-    for command, help_text in [
-        ("process-simulation", "Process the next queued season simulation"),
-        ("process-projection", "Legacy alias for process-simulation"),
-    ]:
-        simulation_parser = subparsers.add_parser(command, help=help_text)
-        simulation_parser.add_argument("--data-dir", type=Path)
-        simulation_parser.add_argument("--timeout-seconds", type=float, default=15.0)
-        simulation_parser.add_argument("--retries", type=int, default=1)
-        simulation_parser.add_argument("--concurrency", type=int, default=5)
+    simulation_parser = subparsers.add_parser(
+        "process-simulation",
+        help="Process the next queued season simulation",
+    )
+    simulation_parser.add_argument("--data-dir", type=Path)
+    simulation_parser.add_argument("--timeout-seconds", type=float, default=15.0)
+    simulation_parser.add_argument("--retries", type=int, default=1)
+    simulation_parser.add_argument("--concurrency", type=int, default=5)
 
     args = parser.parse_args()
     store = get_store(args.data_dir)
@@ -86,7 +85,7 @@ def main() -> None:
         )
     else:
         result = asyncio.run(
-            process_next_projection(
+            process_next_simulation(
                 store,
                 SimulationConfig(
                     timeout_seconds=args.timeout_seconds,

@@ -22,7 +22,7 @@ Public views redact predictions until the lock time. Admin pages can inspect
 them earlier, explicitly reopen a stored prediction, and create or clear result
 overrides.
 
-## Full-season projections
+## Full-season simulations
 
 The web request writes a durable `queued` run and returns immediately. A systemd
 timer invokes the worker, which transitions one run through `running` to
@@ -30,7 +30,7 @@ timer invokes the worker, which transitions one run through `running` to
 predictions for all remaining resolved fixtures and builds a table ordered by
 points, goal difference, goals scored, then team name. Public requests are
 limited by the `Australia/Sydney` calendar day. Stale running jobs are failed
-after their activity lease expires, and incomplete projections retain explicit
+after their activity lease expires, and incomplete simulations retain explicit
 omission details instead of silently presenting partial coverage as complete.
 
 ## Operational boundary

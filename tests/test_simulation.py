@@ -8,13 +8,13 @@ import pytest
 from epl_tipping import simulation
 from epl_tipping.models import prediction_request_payload
 from epl_tipping.simulation import (
-    ProjectionError,
+    SimulationError,
     SimulationConfig,
-    enqueue_projection,
-    latest_projection,
-    latest_projection_run,
-    process_next_projection,
-    projected_table,
+    enqueue_simulation,
+    latest_simulation,
+    latest_simulation_run,
+    process_next_simulation,
+    simulated_table,
     simulate_season,
 )
 
@@ -114,7 +114,7 @@ def test_simulation_combines_actuals_with_fixture_only_predictions(make_fixture)
     assert progress[-1] == (5, 5)
 
 
-def test_invalid_projection_response_uses_zero_zero_fallback(make_fixture) -> None:
+def test_invalid_simulation_response_uses_zero_zero_fallback(make_fixture) -> None:
     async def invalid(payload: dict) -> dict:
         return {"predicted_score_home": -1, "predicted_score_away": 0}
 
@@ -148,7 +148,7 @@ def test_invalid_projection_response_uses_zero_zero_fallback(make_fixture) -> No
     assert "non-negative" in result["matches"][0]["error"]
 
 
-def test_projected_table_calculates_points_goal_difference_and_tiebreaks() -> None:
+def test_simulated_table_calculates_points_goal_difference_and_tiebreaks() -> None:
     matches = [
         {
             "home_team_id": 1,
@@ -182,7 +182,7 @@ def test_projected_table_calculates_points_goal_difference_and_tiebreaks() -> No
         },
     ]
 
-    table = projected_table(matches)
+    table = simulated_table(matches)
 
     assert [row["team"] for row in table] == ["Charlie", "Alpha", "Bravo"]
     assert [row["position"] for row in table] == [1, 2, 3]
@@ -203,7 +203,7 @@ def test_projected_table_calculates_points_goal_difference_and_tiebreaks() -> No
     assert table[2]["points"] == 1
 
 
-def test_projection_queue_rejects_unknown_inactive_duplicate_and_daily_repeat(store, make_fixture, monkeypatch) -> None:
+def test_simulation_queue_rejects_unknown_inactive_duplicate_and_daily_repeat(store, make_fixture, monkeypatch) -> None:
     monkeypatch.setenv("TIPPING_DISPLAY_TIMEZONE", "UTC")
     store.write("fixtures.json", [make_fixture(), make_fixture(source_match_id=2)])
     store.write(
@@ -212,24 +212,24 @@ def test_projection_queue_rejects_unknown_inactive_duplicate_and_daily_repeat(st
     )
     now = datetime(2026, 8, 15, 10, tzinfo=UTC)
 
-    with pytest.raises(ProjectionError, match="not found"):
-        enqueue_projection("unknown", store=store, now=now)
-    with pytest.raises(ProjectionError, match="not active"):
-        enqueue_projection("inactive", store=store, now=now)
+    with pytest.raises(SimulationError, match="not found"):
+        enqueue_simulation("unknown", store=store, now=now)
+    with pytest.raises(SimulationError, match="not active"):
+        enqueue_simulation("inactive", store=store, now=now)
 
-    queued = enqueue_projection("alpha", store=store, now=now)
+    queued = enqueue_simulation("alpha", store=store, now=now)
     assert queued["status"] == "queued"
     assert queued["total"] == 2
-    with pytest.raises(ProjectionError, match="already queued or running"):
-        enqueue_projection("alpha", store=store, now=now)
+    with pytest.raises(SimulationError, match="already queued or running"):
+        enqueue_simulation("alpha", store=store, now=now)
 
-    runs = store.read("projection_runs.json")
+    runs = store.read("simulation_runs.json")
     runs[0]["status"] = "completed"
-    store.write("projection_runs.json", runs)
-    with pytest.raises(ProjectionError, match="already been requested today"):
-        enqueue_projection("alpha", store=store, now=now)
+    store.write("simulation_runs.json", runs)
+    with pytest.raises(SimulationError, match="already been requested today"):
+        enqueue_simulation("alpha", store=store, now=now)
 
-    admin_run = enqueue_projection(
+    admin_run = enqueue_simulation(
         "alpha",
         store=store,
         requested_by="admin",
@@ -239,49 +239,49 @@ def test_projection_queue_rejects_unknown_inactive_duplicate_and_daily_repeat(st
     assert admin_run["requested_by"] == "admin"
 
 
-def test_process_next_projection_completes_run_and_persists_projection(store, make_fixture) -> None:
+def test_process_next_simulation_completes_run_and_persists_simulation(store, make_fixture) -> None:
     store.write("fixtures.json", [make_fixture()])
     store.write("registry.json", [CONTESTANT])
-    run = enqueue_projection("alpha", store=store, enforce_daily_limit=False)
+    run = enqueue_simulation("alpha", store=store, enforce_daily_limit=False)
     seen: list[dict] = []
 
     async def predict(payload: dict) -> dict:
         seen.append(payload)
         return {"predicted_score_home": 3, "predicted_score_away": 1}
 
-    completed = asyncio.run(process_next_projection(store, SimulationConfig(retries=0), predict))
+    completed = asyncio.run(process_next_simulation(store, SimulationConfig(retries=0), predict))
 
     assert seen == [prediction_request_payload(make_fixture())]
     assert completed["id"] == run["id"]
     assert completed["status"] == "completed"
     assert completed["processed"] == 1
-    assert completed["projection_id"]
-    projections = store.read("season_projections.json")
-    assert len(projections) == 1
-    assert projections[0]["run_id"] == run["id"]
-    assert projections[0]["matches"][0]["score_home"] == 3
-    assert asyncio.run(process_next_projection(store, prediction_client=predict)) is None
+    assert completed["simulation_id"]
+    simulations = store.read("season_simulations.json")
+    assert len(simulations) == 1
+    assert simulations[0]["run_id"] == run["id"]
+    assert simulations[0]["matches"][0]["score_home"] == 3
+    assert asyncio.run(process_next_simulation(store, prediction_client=predict)) is None
 
 
-def test_process_next_projection_marks_unhandled_failure(store, make_fixture, monkeypatch) -> None:
+def test_process_next_simulation_marks_unhandled_failure(store, make_fixture, monkeypatch) -> None:
     store.write("fixtures.json", [make_fixture()])
     store.write("registry.json", [CONTESTANT])
-    run = enqueue_projection("alpha", store=store, enforce_daily_limit=False)
+    run = enqueue_simulation("alpha", store=store, enforce_daily_limit=False)
 
     async def broken_simulation(*args, **kwargs):
-        raise RuntimeError("projection exploded")
+        raise RuntimeError("simulation exploded")
 
     monkeypatch.setattr(simulation, "simulate_season", broken_simulation)
-    failed = asyncio.run(process_next_projection(store))
+    failed = asyncio.run(process_next_simulation(store))
 
     assert failed["id"] == run["id"]
     assert failed["status"] == "failed"
-    assert failed["error"] == "RuntimeError: projection exploded"
-    assert store.read("season_projections.json") == []
+    assert failed["error"] == "RuntimeError: simulation exploded"
+    assert store.read("season_simulations.json") == []
 
 
-def test_latest_projection_helpers_select_newest_per_contestant() -> None:
-    projections = [
+def test_latest_simulation_helpers_select_newest_per_contestant() -> None:
+    simulations = [
         {"id": "old", "contestant_id": "alpha", "simulated_at": "2026-08-01T00:00:00Z"},
         {"id": "other", "contestant_id": "bravo", "simulated_at": "2026-09-01T00:00:00Z"},
         {"id": "new", "contestant_id": "alpha", "simulated_at": "2026-08-02T00:00:00Z"},
@@ -291,7 +291,7 @@ def test_latest_projection_helpers_select_newest_per_contestant() -> None:
         {"id": "second", "contestant_id": "alpha", "requested_at": "2026-08-03T00:00:00Z"},
     ]
 
-    assert latest_projection(projections, "alpha")["id"] == "new"
-    assert latest_projection(projections, "missing") is None
-    assert latest_projection_run(runs, "alpha")["id"] == "second"
-    assert latest_projection_run(runs, "missing") is None
+    assert latest_simulation(simulations, "alpha")["id"] == "new"
+    assert latest_simulation(simulations, "missing") is None
+    assert latest_simulation_run(runs, "alpha")["id"] == "second"
+    assert latest_simulation_run(runs, "missing") is None

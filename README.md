@@ -151,8 +151,8 @@ data/
   scores.json
   run_log.json
   source_state.json
-  season_projections.json
-  projection_runs.json
+  season_simulations.json
+  simulation_runs.json
 ```
 
 Use only one app worker while JSON storage is enabled. Set

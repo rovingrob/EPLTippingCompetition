@@ -41,10 +41,10 @@ from .models import (
 from .runner import RunnerConfig, run_due_once
 from .scoring import leaderboard, leaderboard_snake, validate_prediction
 from .simulation import (
-    ProjectionError,
-    enqueue_projection,
-    latest_projection,
-    latest_projection_run,
+    SimulationError,
+    enqueue_simulation,
+    latest_simulation,
+    latest_simulation_run,
 )
 from .storage import get_store
 
@@ -200,8 +200,8 @@ def load_context(request: Request) -> dict[str, Any]:
         registry = store.read("registry.json")
         predictions = store.read("predictions.json")
         scores = store.read("scores.json")
-        projections = store.read("season_projections.json")
-        projection_runs = store.read("projection_runs.json")
+        simulations = store.read("season_simulations.json")
+        simulation_runs = store.read("simulation_runs.json")
         source_state = store.read("source_state.json")
         run_log = list(reversed(store.read("run_log.json")[-10:]))
     admin = is_admin(request)
@@ -220,8 +220,8 @@ def load_context(request: Request) -> dict[str, Any]:
         "season": season,
         "season_label": f"{season}/{str(season + 1)[-2:]}",
         "run_log": run_log,
-        "latest_simulations": {row["id"]: latest_projection(projections, row["id"]) for row in registry},
-        "latest_simulation_runs": {row["id"]: latest_projection_run(projection_runs, row["id"]) for row in registry},
+        "latest_simulations": {row["id"]: latest_simulation(simulations, row["id"]) for row in registry},
+        "latest_simulation_runs": {row["id"]: latest_simulation_run(simulation_runs, row["id"]) for row in registry},
         "fixture_prediction_rows": fixture_prediction_rows(fixtures, registry, predictions, scores, admin),
         "is_admin": admin,
         "admin_auth_configured": admin_auth_configured(),
@@ -402,11 +402,6 @@ def contestant_simulation_page(request: Request, contestant_id: str):
         simulation_run=context["latest_simulation_runs"].get(contestant_id),
     )
     return templates.TemplateResponse(request, "simulation.html", context)
-
-
-@router.get("/leaderboard/{contestant_id}/projection", include_in_schema=False)
-def legacy_contestant_projection_page(contestant_id: str):
-    return RedirectResponse(app_path(f"/leaderboard/{contestant_id}/simulation"), status_code=307)
 
 
 @router.get("/leaderboard/{contestant_id}/api-test")
@@ -649,7 +644,7 @@ def clear_admin_data(
     mapping = {
         "workflow": ["predictions.json", "scores.json", "run_log.json"],
         "endpoints": ["registry.json"],
-        "projections": ["season_projections.json", "projection_runs.json"],
+        "simulations": ["season_simulations.json", "simulation_runs.json"],
     }
     filenames = mapping.get(section)
     if filenames is None:
@@ -661,18 +656,17 @@ def clear_admin_data(
     return redirect_to_admin(f"Cleared {section}")
 
 
-@router.post("/projections/run", include_in_schema=False)
 @router.post("/simulations/run")
 def request_simulation(request: Request, contestant_id: str = Form(...)):
     try:
-        enqueue_projection(
+        enqueue_simulation(
             contestant_id,
             store=get_store(),
             requested_by="admin" if is_admin(request) else "public",
             enforce_daily_limit=not is_admin(request),
         )
         message = "Season simulation queued"
-    except ProjectionError as exc:
+    except SimulationError as exc:
         message = str(exc)
     return RedirectResponse(
         f"{app_path('/leaderboard/' + contestant_id + '/simulation')}?message={quote(message)}",

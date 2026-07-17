@@ -19,7 +19,7 @@ By default the installer:
 - installs locked dependencies;
 - creates `/var/lib/epl-tipping/data` and seeds missing JSON files;
 - creates `/etc/epl-tipping.env` with generated admin secrets when absent;
-- installs the app service and the due-workflow and projection-worker timers;
+- installs the app service and the due-workflow and simulation-worker timers;
 - reloads systemd without starting the units.
 
 The `/opt` location avoids common virtualenv execution restrictions on
@@ -39,7 +39,7 @@ TIPPING_ALLOWED_HOSTS=tipping.example.com,localhost,127.0.0.1
 Start the app and timers:
 
 ```bash
-sudo systemctl enable --now epl-tipping.service epl-tipping-cron.timer epl-tipping-projection.timer
+sudo systemctl enable --now epl-tipping.service epl-tipping-cron.timer epl-tipping-simulation.timer
 ```
 
 Check status and health:
@@ -47,7 +47,7 @@ Check status and health:
 ```bash
 sudo systemctl status epl-tipping.service
 sudo systemctl status epl-tipping-cron.timer
-sudo systemctl status epl-tipping-projection.timer
+sudo systemctl status epl-tipping-simulation.timer
 curl http://127.0.0.1:8000/tipping/healthz
 ```
 
@@ -56,7 +56,7 @@ Read logs:
 ```bash
 sudo journalctl -u epl-tipping.service -f
 sudo journalctl -u epl-tipping-cron.service
-sudo journalctl -u epl-tipping-projection.service
+sudo journalctl -u epl-tipping-simulation.service
 ```
 
 ## Secrets
@@ -106,15 +106,15 @@ configured season once, collects tips for scheduled fixtures from 24 hours until
 30 minutes before kickoff, and scores completed fixtures. Source failures are
 recorded while cached fixture processing continues.
 
-`epl-tipping-projection.timer` polls every minute and processes at most one
-durably queued full-season projection per invocation. The worker uses five
+`epl-tipping-simulation.timer` polls every minute and processes at most one
+durably queued full-season simulation per invocation. The worker uses five
 concurrent contestant calls, a 15-second timeout, and one retry.
 
 Manual equivalents are:
 
 ```bash
 /opt/epl-tipping/.venv/bin/python -m epl_tipping.cron run-due --data-dir /var/lib/epl-tipping/data
-/opt/epl-tipping/.venv/bin/python -m epl_tipping.cron process-projection --data-dir /var/lib/epl-tipping/data
+/opt/epl-tipping/.venv/bin/python -m epl_tipping.cron process-simulation --data-dir /var/lib/epl-tipping/data
 ```
 
 ## Updating

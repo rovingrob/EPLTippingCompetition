@@ -40,7 +40,7 @@ of it, and protect `/tipping/admin*` with Cloudflare Access.
   Contestant endpoints should use their own rate limits and CORS rules.
 - Persistent state lives in JSON files. Keep `data/registry.json`,
   `data/predictions.json`, `data/scores.json`, `data/run_log.json`, and
-  `data/season_projections.json` free of private data before publishing.
+  `data/season_simulations.json` free of private data before publishing.
 - Never expose `FOOTBALL_DATA_TOKEN` to templates, public responses, logs, or
   contestant endpoints. The token belongs only in a protected deployment
   environment file.

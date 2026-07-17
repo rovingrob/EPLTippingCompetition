@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import httpx
 
 from .models import (
-    PROJECTABLE_STATUSES,
+    SIMULATABLE_STATUSES,
     RESULT_AWAY_WIN,
     RESULT_DRAW,
     RESULT_HOME_WIN,
@@ -34,7 +34,7 @@ PredictionClient = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 ProgressCallback = Callable[[int, int], Awaitable[None]]
 
 
-class ProjectionError(RuntimeError):
+class SimulationError(RuntimeError):
     pass
 
 
@@ -60,10 +60,10 @@ async def simulate_season(
         fixture
         for fixture in ordered_fixtures
         if not is_completed_fixture(fixture)
-        and fixture.get("status") in PROJECTABLE_STATUSES
+        and fixture.get("status") in SIMULATABLE_STATUSES
         and is_resolved_fixture(fixture)
     ]
-    projected_ids = {fixture["match_id"] for fixture in remaining}
+    simulated_ids = {fixture["match_id"] for fixture in remaining}
     actual_ids = {match["match_id"] for match in actual_matches}
     omitted = [
         {
@@ -72,7 +72,7 @@ async def simulate_season(
             "reason": "unresolved_teams" if not is_resolved_fixture(fixture) else "unsupported_status",
         }
         for fixture in ordered_fixtures
-        if fixture.get("match_id") not in actual_ids | projected_ids
+        if fixture.get("match_id") not in actual_ids | simulated_ids
     ]
     processed = len(actual_matches) + len(omitted)
     total = len(ordered_fixtures)
@@ -102,7 +102,7 @@ async def simulate_season(
                     await progress_callback(processed, total)
 
     matches = sorted([*actual_matches, *predicted_matches], key=fixture_sort_key)
-    table = projected_table(matches)
+    table = simulated_table(matches)
     errors = sum(1 for match in matches if match.get("fallback_used"))
     status = "completed"
     if errors and omitted:
@@ -133,7 +133,7 @@ async def simulate_season(
     }
 
 
-def enqueue_projection(
+def enqueue_simulation(
     contestant_id: str,
     *,
     store: JsonStore | None = None,
@@ -146,20 +146,20 @@ def enqueue_projection(
     with store.locked():
         registry = store.read("registry.json")
         fixtures = store.read("fixtures.json")
-        runs = store.read("projection_runs.json")
+        runs = store.read("simulation_runs.json")
         recovered = _recover_stale_runs(runs, now)
         if recovered:
-            store.write("projection_runs.json", runs)
+            store.write("simulation_runs.json", runs)
         contestant = next((row for row in registry if row.get("id") == contestant_id), None)
         if contestant is None:
-            raise ProjectionError("Contestant not found")
+            raise SimulationError("Contestant not found")
         if contestant.get("status", "active") != "active":
-            raise ProjectionError("Contestant is not active")
+            raise SimulationError("Contestant is not active")
         if any(
             run.get("contestant_id") == contestant_id and run.get("status") in {"queued", "running"}
             for run in runs
         ):
-            raise ProjectionError("A season simulation is already queued or running")
+            raise SimulationError("A season simulation is already queued or running")
         if enforce_daily_limit:
             today = _local_date(now)
             if any(
@@ -168,7 +168,7 @@ def enqueue_projection(
                 and _date_from_iso(run.get("requested_at")) == today
                 for run in runs
             ):
-                raise ProjectionError("A public season simulation has already been requested today")
+                raise SimulationError("A public season simulation has already been requested today")
 
         run = {
             "id": str(uuid4()),
@@ -182,15 +182,15 @@ def enqueue_projection(
             "status": "queued",
             "processed": 0,
             "total": len(fixtures),
-            "projection_id": None,
+            "simulation_id": None,
             "error": None,
         }
         runs.append(run)
-        store.write("projection_runs.json", runs[-1000:])
+        store.write("simulation_runs.json", runs[-1000:])
     return run
 
 
-async def process_next_projection(
+async def process_next_simulation(
     store: JsonStore | None = None,
     config: SimulationConfig | None = None,
     prediction_client: PredictionClient | None = None,
@@ -198,11 +198,11 @@ async def process_next_projection(
     store = store or get_store()
     config = config or SimulationConfig()
     with store.locked():
-        runs = store.read("projection_runs.json")
+        runs = store.read("simulation_runs.json")
         _recover_stale_runs(runs, utc_now())
         queued = next((run for run in runs if run.get("status") == "queued"), None)
         if queued is None:
-            store.write("projection_runs.json", runs)
+            store.write("simulation_runs.json", runs)
             return None
         run_id = queued["id"]
         contestant_id = queued["contestant_id"]
@@ -210,7 +210,7 @@ async def process_next_projection(
         queued["started_at"] = isoformat_z(utc_now())
         queued["last_progress_at"] = queued["started_at"]
         queued["error"] = None
-        store.write("projection_runs.json", runs)
+        store.write("simulation_runs.json", runs)
         registry = store.read("registry.json")
         fixtures = store.read("fixtures.json")
 
@@ -227,42 +227,42 @@ async def process_next_projection(
         )
 
     try:
-        projection = await simulate_season(
+        simulation = await simulate_season(
             contestant,
             fixtures,
             config,
             prediction_client,
             progress,
         )
-        projection["run_id"] = run_id
+        simulation["run_id"] = run_id
         with store.locked():
-            projections = store.read("season_projections.json")
-            projections.append(projection)
-            store.write("season_projections.json", projections[-200:])
+            simulations = store.read("season_simulations.json")
+            simulations.append(simulation)
+            store.write("season_simulations.json", simulations[-200:])
         _finish_run(
             store,
             run_id,
             status="completed",
-            projection_id=projection["id"],
-            processed=projection["source_fixture_count"],
-            total=projection["source_fixture_count"],
+            simulation_id=simulation["id"],
+            processed=simulation["source_fixture_count"],
+            total=simulation["source_fixture_count"],
         )
     except Exception as exc:
         _finish_run(store, run_id, status="failed", error=f"{type(exc).__name__}: {exc}")
     return _run_by_id(store, run_id)
 
 
-def latest_projection(projections: list[dict[str, Any]], contestant_id: str) -> dict[str, Any] | None:
-    candidates = [row for row in projections if row.get("contestant_id") == contestant_id]
+def latest_simulation(simulations: list[dict[str, Any]], contestant_id: str) -> dict[str, Any] | None:
+    candidates = [row for row in simulations if row.get("contestant_id") == contestant_id]
     return max(candidates, key=lambda row: str(row.get("simulated_at") or ""), default=None)
 
 
-def latest_projection_run(runs: list[dict[str, Any]], contestant_id: str) -> dict[str, Any] | None:
+def latest_simulation_run(runs: list[dict[str, Any]], contestant_id: str) -> dict[str, Any] | None:
     candidates = [row for row in runs if row.get("contestant_id") == contestant_id]
     return max(candidates, key=lambda row: str(row.get("requested_at") or ""), default=None)
 
 
-def projected_table(matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def simulated_table(matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows: dict[str, dict[str, Any]] = {}
     for match in matches:
         home_key = _team_key(match, "home")
@@ -431,12 +431,12 @@ def _table_row(match: dict[str, Any], side: str) -> dict[str, Any]:
 
 def _update_run(store: JsonStore, run_id: str, updates: dict[str, Any]) -> None:
     with store.locked():
-        runs = store.read("projection_runs.json")
+        runs = store.read("simulation_runs.json")
         for run in runs:
             if run.get("id") == run_id:
                 run.update(updates)
                 break
-        store.write("projection_runs.json", runs)
+        store.write("simulation_runs.json", runs)
 
 
 def _finish_run(
@@ -444,7 +444,7 @@ def _finish_run(
     run_id: str,
     *,
     status: str,
-    projection_id: str | None = None,
+    simulation_id: str | None = None,
     processed: int | None = None,
     total: int | None = None,
     error: str | None = None,
@@ -452,7 +452,7 @@ def _finish_run(
     updates: dict[str, Any] = {
         "status": status,
         "completed_at": isoformat_z(utc_now()),
-        "projection_id": projection_id,
+        "simulation_id": simulation_id,
         "error": error,
     }
     if processed is not None:
@@ -463,11 +463,11 @@ def _finish_run(
 
 
 def _run_by_id(store: JsonStore, run_id: str) -> dict[str, Any] | None:
-    return next((run for run in store.read("projection_runs.json") if run.get("id") == run_id), None)
+    return next((run for run in store.read("simulation_runs.json") if run.get("id") == run_id), None)
 
 
 def _recover_stale_runs(runs: list[dict[str, Any]], now: datetime) -> int:
-    stale_after = max(60, int(os.getenv("TIPPING_PROJECTION_STALE_SECONDS", "7200")))
+    stale_after = max(60, int(os.getenv("TIPPING_SIMULATION_STALE_SECONDS", "7200")))
     recovered = 0
     for run in runs:
         if run.get("status") != "running":

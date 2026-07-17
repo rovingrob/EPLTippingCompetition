@@ -93,7 +93,7 @@ fi
 
 run_root install -d -m 750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$DATA_DIR"
 
-for filename in fixtures.json registry.json predictions.json scores.json run_log.json source_state.json season_projections.json projection_runs.json; do
+for filename in fixtures.json registry.json predictions.json scores.json run_log.json source_state.json season_simulations.json simulation_runs.json; do
   if [ -f "$APP_DIR/data/$filename" ] && [ ! -f "$DATA_DIR/$filename" ]; then
     run_root install -m 600 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$APP_DIR/data/$filename" "$DATA_DIR/$filename"
   fi
@@ -193,7 +193,7 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-write_root_file 644 "/etc/systemd/system/$SERVICE_NAME-projection.service" <<EOF
+write_root_file 644 "/etc/systemd/system/$SERVICE_NAME-simulation.service" <<EOF
 [Unit]
 Description=EPL Tipping queued season simulation worker
 After=network-online.target
@@ -219,7 +219,7 @@ LockPersonality=true
 RestrictSUIDSGID=true
 EOF
 
-write_root_file 644 "/etc/systemd/system/$SERVICE_NAME-projection.timer" <<EOF
+write_root_file 644 "/etc/systemd/system/$SERVICE_NAME-simulation.timer" <<EOF
 [Unit]
 Description=Poll the EPL Tipping simulation queue
 
@@ -236,10 +236,10 @@ EOF
 run_root systemctl daemon-reload
 
 if [ "$START_NOW" = "1" ]; then
-  run_root systemctl enable --now "$SERVICE_NAME.service" "$SERVICE_NAME-cron.timer" "$SERVICE_NAME-projection.timer"
-  echo "Started $SERVICE_NAME.service, $SERVICE_NAME-cron.timer, and $SERVICE_NAME-projection.timer."
+  run_root systemctl enable --now "$SERVICE_NAME.service" "$SERVICE_NAME-cron.timer" "$SERVICE_NAME-simulation.timer"
+  echo "Started $SERVICE_NAME.service, $SERVICE_NAME-cron.timer, and $SERVICE_NAME-simulation.timer."
 else
   echo "Installed systemd units without starting them."
   echo "Start later with:"
-  echo "  sudo systemctl enable --now $SERVICE_NAME.service $SERVICE_NAME-cron.timer $SERVICE_NAME-projection.timer"
+  echo "  sudo systemctl enable --now $SERVICE_NAME.service $SERVICE_NAME-cron.timer $SERVICE_NAME-simulation.timer"
 fi

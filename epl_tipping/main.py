@@ -39,7 +39,7 @@ from .models import (
     winner_from_score,
 )
 from .runner import RunnerConfig, run_due_once
-from .scoring import leaderboard, validate_prediction
+from .scoring import leaderboard, leaderboard_snake, validate_prediction
 from .simulation import (
     ProjectionError,
     enqueue_projection,
@@ -206,20 +206,22 @@ def load_context(request: Request) -> dict[str, Any]:
         run_log = list(reversed(store.read("run_log.json")[-10:]))
     admin = is_admin(request)
     season = int(source_state.get("season") or os.getenv("TIPPING_SEASON", "2026"))
+    current_leaderboard = leaderboard(registry, scores)
     return {
         "request": request,
         "fixtures": fixtures,
         "registry": registry,
         "predictions": predictions,
         "scores": scores,
-        "leaderboard": leaderboard(registry, scores),
+        "leaderboard": current_leaderboard,
+        "leaderboard_snake": leaderboard_snake(registry, fixtures, scores),
         "summary": schedule_summary(fixtures),
         "source_state": source_state,
         "season": season,
         "season_label": f"{season}/{str(season + 1)[-2:]}",
         "run_log": run_log,
-        "latest_projections": {row["id"]: latest_projection(projections, row["id"]) for row in registry},
-        "latest_projection_runs": {row["id"]: latest_projection_run(projection_runs, row["id"]) for row in registry},
+        "latest_simulations": {row["id"]: latest_projection(projections, row["id"]) for row in registry},
+        "latest_simulation_runs": {row["id"]: latest_projection_run(projection_runs, row["id"]) for row in registry},
         "fixture_prediction_rows": fixture_prediction_rows(fixtures, registry, predictions, scores, admin),
         "is_admin": admin,
         "admin_auth_configured": admin_auth_configured(),
@@ -388,18 +390,23 @@ def contestant_tips_page(request: Request, contestant_id: str):
     return templates.TemplateResponse(request, "tips.html", context)
 
 
-@router.get("/leaderboard/{contestant_id}/projection")
-def contestant_projection_page(request: Request, contestant_id: str):
+@router.get("/leaderboard/{contestant_id}/simulation")
+def contestant_simulation_page(request: Request, contestant_id: str):
     context = load_context(request)
     contestant = next((row for row in context["registry"] if row.get("id") == contestant_id), None)
     if contestant is None:
         raise HTTPException(status_code=404, detail="Contestant not found")
     context.update(
         contestant=contestant,
-        projection=context["latest_projections"].get(contestant_id),
-        projection_run=context["latest_projection_runs"].get(contestant_id),
+        simulation=context["latest_simulations"].get(contestant_id),
+        simulation_run=context["latest_simulation_runs"].get(contestant_id),
     )
-    return templates.TemplateResponse(request, "projection.html", context)
+    return templates.TemplateResponse(request, "simulation.html", context)
+
+
+@router.get("/leaderboard/{contestant_id}/projection", include_in_schema=False)
+def legacy_contestant_projection_page(contestant_id: str):
+    return RedirectResponse(app_path(f"/leaderboard/{contestant_id}/simulation"), status_code=307)
 
 
 @router.get("/leaderboard/{contestant_id}/api-test")
@@ -654,8 +661,9 @@ def clear_admin_data(
     return redirect_to_admin(f"Cleared {section}")
 
 
-@router.post("/projections/run")
-def request_projection(request: Request, contestant_id: str = Form(...)):
+@router.post("/projections/run", include_in_schema=False)
+@router.post("/simulations/run")
+def request_simulation(request: Request, contestant_id: str = Form(...)):
     try:
         enqueue_projection(
             contestant_id,
@@ -663,11 +671,11 @@ def request_projection(request: Request, contestant_id: str = Form(...)):
             requested_by="admin" if is_admin(request) else "public",
             enforce_daily_limit=not is_admin(request),
         )
-        message = "Season projection queued"
+        message = "Season simulation queued"
     except ProjectionError as exc:
         message = str(exc)
     return RedirectResponse(
-        f"{app_path('/leaderboard/' + contestant_id + '/projection')}?message={quote(message)}",
+        f"{app_path('/leaderboard/' + contestant_id + '/simulation')}?message={quote(message)}",
         status_code=303,
     )
 

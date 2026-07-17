@@ -95,6 +95,8 @@ def prediction_is_public(
     now: datetime | None = None,
     lock_minutes: int = 30,
 ) -> bool:
+    if is_completed_fixture(fixture):
+        return True
     lock_at = prediction_lock_at(fixture, lock_minutes)
     if lock_at is None:
         return False

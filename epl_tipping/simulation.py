@@ -159,7 +159,7 @@ def enqueue_projection(
             run.get("contestant_id") == contestant_id and run.get("status") in {"queued", "running"}
             for run in runs
         ):
-            raise ProjectionError("A season projection is already queued or running")
+            raise ProjectionError("A season simulation is already queued or running")
         if enforce_daily_limit:
             today = _local_date(now)
             if any(
@@ -168,7 +168,7 @@ def enqueue_projection(
                 and _date_from_iso(run.get("requested_at")) == today
                 for run in runs
             ):
-                raise ProjectionError("A public season projection has already been requested today")
+                raise ProjectionError("A public season simulation has already been requested today")
 
         run = {
             "id": str(uuid4()),
@@ -483,7 +483,7 @@ def _recover_stale_runs(runs: list[dict[str, Any]], now: datetime) -> int:
             {
                 "status": "failed",
                 "completed_at": isoformat_z(now),
-                "error": "Projection worker stopped before completing the run",
+                "error": "Simulation worker stopped before completing the run",
             }
         )
         recovered += 1

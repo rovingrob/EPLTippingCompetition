@@ -30,7 +30,7 @@
   <tbody>
   {% for fixture in fixtures %}
     {% set prediction_rows = fixture_prediction_rows[fixture.match_id] %}
-    <tr data-search="{{ fixture.matchday }} {{ fixture.home_team }} {{ fixture.home_team_short_name }} {{ fixture.away_team }} {{ fixture.away_team_short_name }}" data-status="{{ fixture.status }}">
+    <tr class="fixture-row" data-search="{{ fixture.matchday }} {{ fixture.home_team }} {{ fixture.home_team_short_name }} {{ fixture.away_team }} {{ fixture.away_team_short_name }}" data-status="{{ fixture.status }}" data-expandable-row data-detail-row="fixture-predictions-{{ fixture.match_id }}" tabindex="0">
       <td>{{ fixture.matchday or "—" }}</td>
       <td><time data-utc="{{ fixture.kickoff_at or '' }}">{{ fixture.kickoff_at or "TBC" }}</time></td>
       <td><strong>{{ display_team(fixture, "home") }}</strong></td>
@@ -38,20 +38,25 @@
       <td><strong>{{ display_team(fixture, "away") }}</strong></td>
       <td><span class="pill {{ fixture.status }}">{{ fixture.status|replace('_', ' ') }}</span>{% if fixture.result_source == "manual" %}<span class="pill warning">manual</span>{% endif %}</td>
       <td>
-        <details>
-          <summary>View</summary>
-          <div class="tip-list">
+        <button class="fixture-toggle" type="button" data-fixture-toggle aria-expanded="false" aria-controls="fixture-predictions-{{ fixture.match_id }}"><span class="fixture-arrow" aria-hidden="true"></span><span>View details</span></button>
+      </td>
+    </tr>
+    <tr id="fixture-predictions-{{ fixture.match_id }}" class="fixture-prediction-row" hidden>
+      <td colspan="7">
+          <div class="fixture-predictions">
+            <div class="fixture-predictions-head"><div><strong>Predictions</strong> <span class="muted">{{ display_team(fixture, 'home') }} vs {{ display_team(fixture, 'away') }}</span></div><span class="pill">{{ prediction_rows|selectattr('prediction_record')|list|length }} / {{ prediction_rows|length }} submitted</span></div>
+            <div class="fixture-prediction-scroll"><table class="mini-table fixture-prediction-table"><thead><tr><th>Contestant</th><th>Status</th><th>Prediction</th><th>Pick</th><th>Confidence</th><th>Response</th><th>Outcome</th><th>Points</th></tr></thead><tbody>
           {% for row in prediction_rows %}
-            <div><strong>{{ row.contestant.name }}</strong>
-              {% if row.hidden %}<span class="muted">Hidden until lock</span>
-              {% elif row.prediction %}<span>{{ row.prediction.predicted_score_home }}–{{ row.prediction.predicted_score_away }}</span>
-              {% elif row.prediction_record and not row.prediction_record.valid %}<span class="error">Invalid</span>
-              {% else %}<span class="muted">No prediction</span>{% endif %}
-              {% if row.score %}<span>{{ "%.1f"|format(row.score.points) }} pts</span>{% endif %}
-            </div>
-          {% else %}<span class="muted">No contestants</span>{% endfor %}
+            <tr><td><a href="{{ app_path('/leaderboard/' ~ row.contestant.id) }}"><strong>{{ row.contestant.name }}</strong></a></td><td><span class="pill">{{ row.contestant.status }}</span></td>
+              <td>{% if row.hidden %}<span class="muted">Hidden until lock</span>{% elif row.prediction %}<span class="score">{{ row.prediction.predicted_score_home }}–{{ row.prediction.predicted_score_away }}</span>{% elif row.prediction_record and not row.prediction_record.valid %}<span class="error">Invalid response</span>{% else %}<span class="muted">No prediction</span>{% endif %}</td>
+              <td>{% if row.hidden or not row.prediction %}<span class="muted">—</span>{% elif row.prediction.predicted_score_home > row.prediction.predicted_score_away %}{{ display_team(fixture, 'home') }}{% elif row.prediction.predicted_score_away > row.prediction.predicted_score_home %}{{ display_team(fixture, 'away') }}{% else %}Draw{% endif %}</td>
+              <td>{% if not row.hidden and row.prediction and row.prediction.confidence is not none %}{{ "%.0f"|format(row.prediction.confidence * 100) }}%{% else %}<span class="muted">Not set</span>{% endif %}</td>
+              <td>{% if row.hidden %}<span class="muted">Private</span>{% elif row.prediction_record and row.prediction_record.valid %}<span class="pill completed">valid</span>{% elif row.prediction_record %}<span class="pill warning">invalid</span>{% if row.prediction_record.error %}<span class="fixture-error">{{ row.prediction_record.error }}</span>{% endif %}{% else %}<span class="muted">No response</span>{% endif %}</td>
+              <td>{% if row.score %}<span class="pill">{{ row.score.reason|replace('_', ' ') }}</span>{% else %}<span class="muted">Unscored</span>{% endif %}</td>
+              <td>{% if row.score %}<strong>{{ "%.1f"|format(row.score.points) }}</strong>{% else %}<span class="muted">—</span>{% endif %}</td></tr>
+          {% else %}<tr><td colspan="8" class="empty">No contestants registered.</td></tr>{% endfor %}
+            </tbody></table></div>
           </div>
-        </details>
       </td>
     </tr>
   {% else %}<tr><td colspan="7" class="empty">No fixtures loaded. An administrator can run the first source sync.</td></tr>{% endfor %}

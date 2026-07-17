@@ -195,7 +195,7 @@ EOF
 
 write_root_file 644 "/etc/systemd/system/$SERVICE_NAME-projection.service" <<EOF
 [Unit]
-Description=EPL Tipping queued projection worker
+Description=EPL Tipping queued season simulation worker
 After=network-online.target
 Wants=network-online.target
 
@@ -206,7 +206,7 @@ Group=$SERVICE_GROUP
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$ENV_FILE
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=$PYTHON_BIN -m epl_tipping.cron process-projection --data-dir $DATA_DIR --timeout-seconds 15 --retries 1 --concurrency 5
+ExecStart=$PYTHON_BIN -m epl_tipping.cron process-simulation --data-dir $DATA_DIR --timeout-seconds 15 --retries 1 --concurrency 5
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
@@ -221,7 +221,7 @@ EOF
 
 write_root_file 644 "/etc/systemd/system/$SERVICE_NAME-projection.timer" <<EOF
 [Unit]
-Description=Poll the EPL Tipping projection queue
+Description=Poll the EPL Tipping simulation queue
 
 [Timer]
 OnBootSec=1min

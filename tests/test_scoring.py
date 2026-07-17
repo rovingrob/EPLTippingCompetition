@@ -4,6 +4,7 @@ import pytest
 
 from epl_tipping.scoring import (
     leaderboard,
+    leaderboard_snake,
     score_completed_matches,
     score_prediction,
     validate_prediction,
@@ -139,3 +140,63 @@ def test_leaderboard_aggregates_orders_and_assigns_competition_ranks() -> None:
     assert table[0]["exact_scores"] == 1
     assert table[2]["status"] == "inactive"
     assert table[3]["status"] == "unknown"
+
+
+def test_leaderboard_snake_tracks_scored_history_and_remaining_season(make_fixture) -> None:
+    fixtures = [
+        make_fixture(source_match_id=1, matchday=1, kickoff_at="2026-08-15T14:00:00Z"),
+        make_fixture(source_match_id=2, matchday=1, kickoff_at="2026-08-16T14:00:00Z"),
+        make_fixture(source_match_id=3, matchday=2, kickoff_at="2026-08-22T14:00:00Z"),
+    ]
+    registry = [
+        {"id": "alpha", "name": "Alpha", "status": "active"},
+        {"id": "bravo", "name": "Bravo", "status": "active"},
+    ]
+    scores = [
+        {"contestant_id": "alpha", "match_id": "fd-1", "points": 1.5, "reason": "exact_score"},
+        {"contestant_id": "bravo", "match_id": "fd-1", "points": 1.0, "reason": "correct_result"},
+        {"contestant_id": "alpha", "match_id": "fd-2", "points": 0.0, "reason": "incorrect_result"},
+        {"contestant_id": "bravo", "match_id": "fd-2", "points": 1.5, "reason": "exact_score"},
+    ]
+
+    snake = leaderboard_snake(registry, fixtures, scores)
+
+    assert len(snake["checkpoints"]) == 4
+    assert snake["scored_count"] == 2
+    assert snake["remaining_count"] == 1
+    assert snake["latest_scored_checkpoint"]["match_id"] == "fd-2"
+    assert snake["latest_scored_checkpoint"]["label"] == "Matchday 1: Arsenal vs Chelsea"
+    assert snake["future_zone"]["label"] == "1 games left / 1.5 pts available"
+    by_id = {row["contestant_id"]: row for row in snake["contestants"]}
+    assert by_id["alpha"]["current_points"] == 1.5
+    assert by_id["bravo"]["current_points"] == 2.5
+    assert by_id["bravo"]["current_rank"] == 1
+    assert len(by_id["alpha"]["history"]) == 3
+    assert by_id["alpha"]["path"].startswith("M ")
+
+
+def test_leaderboard_snake_keeps_sparse_axis_labels_clear_of_latest_result(make_fixture) -> None:
+    fixtures = [
+        make_fixture(
+            source_match_id=index,
+            matchday=((index - 1) // 10) + 1,
+            kickoff_at=f"2026-08-{((index - 1) % 28) + 1:02d}T{index % 24:02d}:00:00Z",
+        )
+        for index in range(1, 61)
+    ]
+    scores = [
+        {"contestant_id": "alpha", "match_id": f"fd-{index}", "points": 1.0, "reason": "correct_result"}
+        for index in range(1, 9)
+    ]
+
+    snake = leaderboard_snake([{"id": "alpha", "name": "Alpha", "status": "active"}], fixtures, scores)
+    shown = [row["index"] for row in snake["checkpoints"] if row["show_label"]]
+
+    assert snake["latest_scored_checkpoint"]["index"] in shown
+    assert all(
+        index == snake["latest_scored_checkpoint"]["index"]
+        or abs(index - snake["latest_scored_checkpoint"]["index"]) >= 2
+        for index in shown
+    )
+    plot_width = snake["chart"]["width"] - snake["chart"]["plot_left"] - snake["chart"]["plot_right"]
+    assert plot_width / snake["chart"]["width"] > 0.85

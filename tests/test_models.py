@@ -60,6 +60,18 @@ def test_prediction_lock_is_thirty_minutes_before_kickoff(make_fixture) -> None:
     assert prediction_lock_at(make_fixture(kickoff_at="bad")) is None
 
 
+def test_completed_fixture_predictions_are_public_even_with_future_kickoff(make_fixture) -> None:
+    fixture = make_fixture(
+        kickoff_at="2099-08-15T14:00:00Z",
+        status="completed",
+        source_status="FINISHED",
+        score_home=2,
+        score_away=1,
+    )
+
+    assert prediction_is_public(fixture, now=datetime(2026, 8, 15, tzinfo=UTC)) is True
+
+
 def test_prediction_payload_is_fixture_only_contract(make_fixture) -> None:
     payload = prediction_request_payload(make_fixture())
 

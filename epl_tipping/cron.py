@@ -48,11 +48,15 @@ def main() -> None:
     sync_parser.add_argument("--dry-run", action="store_true")
     add_source_args(sync_parser)
 
-    projection_parser = subparsers.add_parser("process-projection", help="Process the next queued season projection")
-    projection_parser.add_argument("--data-dir", type=Path)
-    projection_parser.add_argument("--timeout-seconds", type=float, default=15.0)
-    projection_parser.add_argument("--retries", type=int, default=1)
-    projection_parser.add_argument("--concurrency", type=int, default=5)
+    for command, help_text in [
+        ("process-simulation", "Process the next queued season simulation"),
+        ("process-projection", "Legacy alias for process-simulation"),
+    ]:
+        simulation_parser = subparsers.add_parser(command, help=help_text)
+        simulation_parser.add_argument("--data-dir", type=Path)
+        simulation_parser.add_argument("--timeout-seconds", type=float, default=15.0)
+        simulation_parser.add_argument("--retries", type=int, default=1)
+        simulation_parser.add_argument("--concurrency", type=int, default=5)
 
     args = parser.parse_args()
     store = get_store(args.data_dir)
@@ -92,7 +96,7 @@ def main() -> None:
             )
         )
         if result is None:
-            result = {"status": "idle", "message": "No queued season projection"}
+            result = {"status": "idle", "message": "No queued season simulation"}
 
     print(json.dumps(result, indent=2, sort_keys=True))
 

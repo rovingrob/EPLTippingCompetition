@@ -125,18 +125,18 @@ If the provider is temporarily unavailable, `run-due` records the source error
 and continues with cached fixtures. Use `--no-sync-source` to skip the source
 request intentionally.
 
-Public full-season projection requests are durably queued. A worker combines
+Public full-season simulation requests are durably queued. A worker combines
 authoritative completed results with a contestant's predictions for every
-remaining fixture, then calculates the projected table. Process one queued run:
+remaining fixture, then calculates the simulated table. Process one queued run:
 
 ```bash
-uv run python -m epl_tipping.cron process-projection
+uv run python -m epl_tipping.cron process-simulation
 ```
 
 The deployment timer runs the due workflow every four hours (six source syncs
-per day) and polls the projection queue every minute. Projection calls use five
+per day) and polls the simulation queue every minute. Simulation calls use five
 concurrent requests, one retry, and a deterministic fallback after failure.
-Public users may request one projection per contestant per Sydney calendar day;
+Public users may request one simulation per contestant per Sydney calendar day;
 admins are exempt from that limit.
 
 ## Storage

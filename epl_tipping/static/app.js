@@ -31,13 +31,50 @@ function filterTable(table) {
   const search = document.querySelector(`[data-table-search="${table.id}"]`);
   const query = (search?.value || "").trim().toLowerCase();
   const filters = [...document.querySelectorAll(`[data-table-filter="${table.id}"]`)];
-  table.querySelectorAll("tbody tr").forEach((row) => {
+  table.querySelectorAll("tbody tr[data-search]").forEach((row) => {
     const matchesSearch = !query || (row.dataset.search || row.textContent).toLowerCase().includes(query);
     const matchesFilters = filters.every((filter) => {
       if (!filter.value) return true;
       return (row.dataset[filter.dataset.filterKey] || "") === filter.value;
     });
     row.hidden = !(matchesSearch && matchesFilters);
+    const detailRow = attachedDetailRow(row);
+    if (detailRow) detailRow.hidden = row.hidden || !isExpandableRowOpen(row);
+  });
+}
+
+function attachedDetailRow(row) {
+  return row.dataset.detailRow ? document.getElementById(row.dataset.detailRow) : null;
+}
+
+function isExpandableRowOpen(row) {
+  return row.querySelector("[data-fixture-toggle]")?.getAttribute("aria-expanded") === "true";
+}
+
+function setExpandableRow(row, expanded) {
+  const toggle = row.querySelector("[data-fixture-toggle]");
+  const detailRow = attachedDetailRow(row);
+  row.classList.toggle("is-expanded", expanded);
+  toggle?.setAttribute("aria-expanded", String(expanded));
+  if (detailRow) detailRow.hidden = !expanded || row.hidden;
+}
+
+function setupExpandableRows() {
+  document.querySelectorAll("[data-expandable-row]").forEach((row) => {
+    const toggle = row.querySelector("[data-fixture-toggle]");
+    toggle?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setExpandableRow(row, !isExpandableRowOpen(row));
+    });
+    row.addEventListener("click", (event) => {
+      if (!(event.target instanceof Element) || event.target.closest("a, button, input, select, textarea, label")) return;
+      setExpandableRow(row, !isExpandableRowOpen(row));
+    });
+    row.addEventListener("keydown", (event) => {
+      if (event.target !== row || !["Enter", " "].includes(event.key)) return;
+      event.preventDefault();
+      setExpandableRow(row, !isExpandableRowOpen(row));
+    });
   });
 }
 
@@ -92,6 +129,60 @@ function setupApiTest() {
   });
 }
 
+function setSnakeActive(root, contestantId, locked) {
+  root.querySelectorAll("[data-snake-contestant]").forEach((item) => {
+    const active = Boolean(contestantId) && item.dataset.snakeContestant === contestantId;
+    item.classList.toggle("is-active", active);
+    item.classList.toggle("is-dimmed", Boolean(contestantId) && !active);
+    if (item instanceof HTMLButtonElement) {
+      item.setAttribute("aria-pressed", String(Boolean(locked) && active));
+    }
+  });
+
+  document.querySelectorAll("[data-contestant-id]").forEach((row) => {
+    row.classList.toggle("is-snake-highlight", Boolean(contestantId) && row.dataset.contestantId === contestantId);
+  });
+}
+
+function lockedSnakeContestant(root) {
+  return root.dataset.lockedContestant || "";
+}
+
+function setupLeaderboardSnake() {
+  document.querySelectorAll("[data-leaderboard-snake]").forEach((root) => {
+    root.querySelectorAll("[data-snake-contestant]").forEach((item) => {
+      const contestantId = item.dataset.snakeContestant;
+      if (!contestantId) return;
+
+      item.addEventListener("mouseenter", () => {
+        if (!lockedSnakeContestant(root)) setSnakeActive(root, contestantId, false);
+      });
+      item.addEventListener("mouseleave", () => {
+        if (!lockedSnakeContestant(root)) setSnakeActive(root, "", false);
+      });
+      item.addEventListener("focus", () => {
+        if (!lockedSnakeContestant(root)) setSnakeActive(root, contestantId, false);
+      });
+      item.addEventListener("blur", () => {
+        if (!lockedSnakeContestant(root)) setSnakeActive(root, "", false);
+      });
+      item.addEventListener("click", () => {
+        const nextId = lockedSnakeContestant(root) === contestantId ? "" : contestantId;
+        root.dataset.lockedContestant = nextId;
+        setSnakeActive(root, nextId, Boolean(nextId));
+      });
+    });
+
+    root.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      root.dataset.lockedContestant = "";
+      setSnakeActive(root, "", false);
+    });
+  });
+}
+
 formatUtcTimes();
 setupTableTools();
+setupExpandableRows();
 setupApiTest();
+setupLeaderboardSnake();

@@ -170,6 +170,61 @@ def test_predictions_are_public_at_or_after_lock(tmp_path, monkeypatch, make_fix
     assert "Hidden" not in response.text
 
 
+def test_completed_future_dated_fixture_predictions_are_public_in_schedule(
+    tmp_path,
+    monkeypatch,
+    make_fixture,
+) -> None:
+    store = configure_app_store(tmp_path, monkeypatch)
+    store.write(
+        "fixtures.json",
+        [
+            make_fixture(
+                kickoff_at="2099-08-15T14:00:00Z",
+                status="completed",
+                source_status="FINISHED",
+                score_home=2,
+                score_away=1,
+            )
+        ],
+    )
+    store.write("registry.json", [endpoint()])
+    store.write("predictions.json", [prediction()])
+    store.write(
+        "scores.json",
+        [{"contestant_id": "alpha", "match_id": "fd-1001", "points": 0.0, "reason": "incorrect_result"}],
+    )
+
+    response = TestClient(app).get("/tipping/")
+
+    assert response.status_code == 200
+    assert "7–6" in response.text
+    assert "37%" in response.text
+    assert "Hidden until lock" not in response.text
+    assert "Confidence" in response.text
+    assert "Response" in response.text
+    assert "Outcome" in response.text
+    assert "Points" in response.text
+
+
+def test_leaderboard_renders_interactive_snake(tmp_path, monkeypatch, make_fixture) -> None:
+    store = configure_app_store(tmp_path, monkeypatch)
+    store.write("fixtures.json", [make_fixture(status="completed", score_home=2, score_away=1)])
+    store.write("registry.json", [endpoint()])
+    store.write(
+        "scores.json",
+        [{"contestant_id": "alpha", "match_id": "fd-1001", "points": 1.5, "reason": "exact_score"}],
+    )
+
+    response = TestClient(app).get("/tipping/leaderboard")
+
+    assert response.status_code == 200
+    assert "Leaderboard snake" in response.text
+    assert "snake-chart" in response.text
+    assert 'data-snake-contestant="alpha"' in response.text
+    assert "Matchday 1: Arsenal vs Chelsea" in response.text
+
+
 def test_contestant_routes_and_api_test_render_fixture_only_payload(tmp_path, monkeypatch, make_fixture) -> None:
     store = configure_app_store(tmp_path, monkeypatch)
     fixture = make_fixture()
@@ -179,6 +234,7 @@ def test_contestant_routes_and_api_test_render_fixture_only_payload(tmp_path, mo
 
     assert client.get("/tipping/leaderboard/missing").status_code == 404
     assert client.get("/tipping/leaderboard/missing/tips").status_code == 404
+    assert client.get("/tipping/leaderboard/missing/simulation").status_code == 404
     assert client.get("/tipping/leaderboard/missing/projection").status_code == 404
     assert client.get("/tipping/leaderboard/alpha/api-test").status_code == 401
     client.cookies.set("admin_session", encrypt_admin_cookie(), path="/tipping")
@@ -343,20 +399,63 @@ def test_admin_can_reopen_one_or_all_predictions_for_a_fixture(tmp_path, monkeyp
     assert all(row.get("match_id") == "fd-1001" for row in audit_log)
 
 
-def test_projection_request_route_queues_public_run(tmp_path, monkeypatch, make_fixture) -> None:
+def test_simulation_request_route_queues_public_run(tmp_path, monkeypatch, make_fixture) -> None:
     store = configure_app_store(tmp_path, monkeypatch)
     store.write("fixtures.json", [make_fixture()])
     store.write("registry.json", [endpoint()])
 
     response = TestClient(app).post(
-        "/tipping/projections/run",
+        "/tipping/simulations/run",
         data={"contestant_id": "alpha"},
         follow_redirects=False,
     )
 
     assert response.status_code == 303
-    assert response.headers["location"].startswith("/tipping/leaderboard/alpha/projection?message=")
+    assert response.headers["location"].startswith("/tipping/leaderboard/alpha/simulation?message=")
     run = store.read("projection_runs.json")[0]
     assert run["contestant_id"] == "alpha"
     assert run["requested_by"] == "public"
     assert run["status"] == "queued"
+
+
+def test_leaderboard_shows_latest_simulated_winner_and_simulate_action(
+    tmp_path,
+    monkeypatch,
+    make_fixture,
+) -> None:
+    store = configure_app_store(tmp_path, monkeypatch)
+    store.write("fixtures.json", [make_fixture()])
+    store.write("registry.json", [endpoint()])
+    store.write(
+        "season_projections.json",
+        [
+            {
+                "id": "simulation-1",
+                "contestant_id": "alpha",
+                "simulated_at": "2026-08-15T14:00:00Z",
+                "champion": "Arsenal",
+            }
+        ],
+    )
+
+    response = TestClient(app).get("/tipping/leaderboard")
+
+    assert response.status_code == 200
+    assert "Predicted winner:" in response.text
+    assert "Arsenal" in response.text
+    assert 'href="/tipping/leaderboard/alpha/simulation"' in response.text
+    assert 'action="/tipping/simulations/run"' in response.text
+    assert "Simulate" in response.text
+    assert ">Projection<" not in response.text
+
+
+def test_legacy_projection_page_redirects_to_simulation(tmp_path, monkeypatch) -> None:
+    configure_app_store(tmp_path, monkeypatch)
+
+    response = TestClient(app).get(
+        "/tipping/leaderboard/alpha/projection",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/tipping/leaderboard/alpha/simulation"

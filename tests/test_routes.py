@@ -71,6 +71,9 @@ def test_root_pages_assets_and_security_headers_are_served_under_prefix(tmp_path
 
     page = client.get("/tipping/")
     assert "Premier League Schedule" in page.text
+    assert 'class="eyebrow"' not in page.text
+    assert "Fixtures, kickoff times, and results in one place." in page.text
+    assert 'href="/tipping/schedule.json">Download schedule.json</a>' in page.text
     assert 'href="/tipping/static/styles.css?v=' in page.text
     assert 'src="/tipping/static/app.js?v=' in page.text
     assert 'src="/tipping/static/theme-init.js?v=' in page.text
@@ -264,6 +267,10 @@ def test_today_links_to_separate_prediction_detail_screen(
     assert 'data-sortable-table' in response.text
     assert 'data-sort-key="kickoff"' in response.text
     assert 'data-sortable-row' in response.text
+    assert "<th>Tips</th>" in response.text
+    assert 'class="fixture-details-link"' in response.text
+    assert 'class="fixture-matchup-link"' not in response.text
+    assert 'data-sort-key="winner"' not in response.text
     assert 'href="/tipping/fixtures/fd-1001"' in response.text
     assert "7–6" not in response.text
 
@@ -384,6 +391,7 @@ def test_leaderboard_renders_interactive_snake(tmp_path, monkeypatch, make_fixtu
     response = TestClient(app).get("/tipping/leaderboard")
 
     assert response.status_code == 200
+    assert "Bot competition" not in response.text
     assert "Leaderboard snake" in response.text
     assert "snake-chart" in response.text
     assert 'data-snake-contestant="alpha"' in response.text

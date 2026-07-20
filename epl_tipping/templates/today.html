@@ -28,8 +28,8 @@
         <th><button type="button" data-sort-key="matchday" data-sort-type="number">MD</button></th>
         <th><button type="button" data-sort-key="kickoff" data-sort-type="date">Kickoff</button></th>
         <th class="fixture-matchup-heading"><button type="button" data-sort-key="home">Fixture</button></th>
-        <th><button type="button" data-sort-key="winner">Winner</button></th>
         <th><button type="button" data-sort-key="status">Status</button></th>
+        <th>Tips</th>
       </tr>
     </thead>
     <tbody>
@@ -42,15 +42,14 @@
         data-sort-home="{{ display_team(fixture, 'home') }}"
         data-sort-away="{{ display_team(fixture, 'away') }}"
         data-sort-result="{% if is_completed_fixture(fixture) %}{{ fixture.score_home }}-{{ fixture.score_away }}{% endif %}"
-        data-sort-winner="{{ fixture.winner or '' }}"
         data-sort-status="{{ fixture.status }}"
       >
         {% set fixture_middle = fixture.score_home ~ '–' ~ fixture.score_away if is_completed_fixture(fixture) else 'P–P' if fixture.status == 'postponed' else 'vs' %}
         <td class="fixture-number-cell"><span>{{ fixture.matchday or "—" }}</span></td>
         <td><time data-utc="{{ fixture.kickoff_at or '' }}">{{ fixture.kickoff_at or "TBC" }}</time></td>
-        <td class="fixture-matchup-cell"><a class="fixture-matchup-link" href="{{ app_path('/fixtures/' ~ fixture.match_id) }}" aria-label="View predictions for {{ display_team(fixture, 'home') }} vs {{ display_team(fixture, 'away') }}">{{ fixture_matchup(fixture, fixture_middle) }}</a></td>
-        <td>{% if is_completed_fixture(fixture) %}{{ fixture.winner or "Draw" }}{% else %}<span class="muted">TBD</span>{% endif %}</td>
+        <td class="fixture-matchup-cell">{{ fixture_matchup(fixture, fixture_middle) }}</td>
         <td>{{ status_pill(fixture.status|replace('_', ' '), fixture.status) }}</td>
+        <td><a class="fixture-details-link" href="{{ app_path('/fixtures/' ~ fixture.match_id) }}"><span>View</span><span aria-hidden="true">›</span></a></td>
       </tr>
       {% else %}<tr><td colspan="5" class="empty">No Premier League fixtures on this date.</td></tr>{% endfor %}
     </tbody>

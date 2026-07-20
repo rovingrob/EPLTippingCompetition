@@ -647,3 +647,35 @@ def test_leaderboard_shows_latest_simulated_winner_and_simulate_action(
     assert 'href="/tipping/leaderboard/alpha/simulation"' in response.text
     assert 'action="/tipping/simulations/run"' in response.text
     assert "Simulate" in response.text
+
+
+def test_simulation_actions_are_disabled_while_run_is_pending(
+    tmp_path,
+    monkeypatch,
+    make_fixture,
+) -> None:
+    store = configure_app_store(tmp_path, monkeypatch)
+    store.write("fixtures.json", [make_fixture()])
+    store.write("registry.json", [endpoint()])
+    store.write(
+        "simulation_runs.json",
+        [
+            {
+                "id": "run-1",
+                "contestant_id": "alpha",
+                "contestant_name": "Alpha",
+                "requested_at": "2026-08-15T14:00:00Z",
+                "status": "queued",
+                "processed": 0,
+                "total": 1,
+            }
+        ],
+    )
+
+    leaderboard_response = TestClient(app).get("/tipping/leaderboard")
+    simulation_response = TestClient(app).get("/tipping/leaderboard/alpha/simulation")
+
+    assert leaderboard_response.status_code == 200
+    assert 'disabled aria-disabled="true">Queued</button>' in leaderboard_response.text
+    assert simulation_response.status_code == 200
+    assert 'disabled aria-disabled="true">Simulation queued</button>' in simulation_response.text

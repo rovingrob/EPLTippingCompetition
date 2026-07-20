@@ -17,6 +17,18 @@ button, .button {
 }
 button:hover, .button:hover { background: var(--green-hover); text-decoration: none; }
 button:active, .button:active { transform: translateY(1px); }
+button:disabled, button[aria-disabled="true"] {
+  background: var(--elevated);
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.72;
+  transform: none;
+}
+button:disabled:hover, button:disabled:active, button[aria-disabled="true"]:hover, button[aria-disabled="true"]:active {
+  background: var(--elevated);
+  color: var(--muted);
+  transform: none;
+}
 button:focus-visible, .button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 2px solid var(--green);
   outline-offset: 3px;

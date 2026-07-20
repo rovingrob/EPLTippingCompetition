@@ -9,6 +9,23 @@ leaderboard.
 The application is a single-worker FastAPI/Jinja service with JSON persistence.
 Public pages live below `/tipping/`.
 
+## Screenshots
+
+These examples show the local competition after 16 matchdays with eight
+prediction bots.
+
+### Schedule
+
+![Premier League schedule filtered to matchday 16](docs/screenshots/schedule-matchday-16.jpg)
+
+### Leaderboard
+
+![Eight-bot leaderboard and points history after matchday 16](docs/screenshots/leaderboard-matchday-16.jpg)
+
+### Fixture detail
+
+![Fixture prediction analysis for Arsenal versus Manchester United](docs/screenshots/fixture-detail-arsenal-man-united.jpg)
+
 ## Competition rules
 
 - The runner requests predictions from 24 hours until 30 minutes before kickoff.
@@ -84,6 +101,8 @@ TIPPING_COMPETITION_TIMEZONE=Australia/Sydney
 ADMIN_TOKEN=local-dev-admin-token
 ADMIN_COOKIE_SECRET=use-a-different-long-random-value
 ADMIN_COOKIE_SECURE=false
+TIPPING_DEV_SIMULATION_WORKER=true
+TIPPING_SIMULATION_WORKER_POLL_SECONDS=1
 ```
 
 The source client loads the root `.env` for local development. Production uses
@@ -102,6 +121,11 @@ Open <http://127.0.0.1:8000/tipping/>. Run tests with:
 ```bash
 uv run pytest
 ```
+
+`TIPPING_DEV_SIMULATION_WORKER=true` starts a development-only worker inside
+the web process. It polls the durable simulation queue, starts UI-triggered
+simulations automatically, and drains multiple queued runs in order. Leave it
+disabled in production, where the systemd simulation timer owns the queue.
 
 ## Operations
 

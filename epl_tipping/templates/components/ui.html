@@ -1,0 +1,22 @@
+{% macro page_header(heading, eyebrow=none, description=none, today_timezone=none) -%}
+<section class="page-head"{% if today_timezone %} data-today-timezone="{{ today_timezone }}"{% endif %}>
+  <div class="page-head-copy">
+    {% if eyebrow %}<p class="eyebrow">{{ eyebrow }}</p>{% endif %}
+    <h1>{{ heading }}</h1>
+    {% if description %}<p>{{ description }}</p>{% endif %}
+  </div>
+  {% if caller is defined %}<div class="page-head-actions">{{ caller() }}</div>{% endif %}
+</section>
+{%- endmacro %}
+
+{% macro status_pill(label, variant=none) -%}
+<span class="pill{% if variant %} {{ variant }}{% endif %}">{{ label }}</span>
+{%- endmacro %}
+
+{% macro metric_card(label, value, detail=none) -%}
+<article class="metric-card">
+  <span>{{ label }}</span>
+  <strong>{{ value }}</strong>
+  {% if detail %}<small>{{ detail }}</small>{% endif %}
+</article>
+{%- endmacro %}

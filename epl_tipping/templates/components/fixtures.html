@@ -1,0 +1,43 @@
+{% macro team_badge(label, side) -%}
+<span class="team-badge team-badge--{{ side }}" data-team="{{ label|lower }}" aria-hidden="true"></span>
+{%- endmacro %}
+
+{% macro team_badge_from_name(name) -%}
+{% set team_codes = {
+  "Arsenal": "ARS", "Aston Villa": "AVL", "Bournemouth": "BOU", "Brentford": "BRE",
+  "Brighton": "BHA", "Brighton Hove": "BHA", "Burnley": "BUR", "Chelsea": "CHE",
+  "Coventry City": "COV", "Crystal Palace": "CRY", "Everton": "EVE", "Fulham": "FUL",
+  "Hull City": "HUL", "Ipswich Town": "IPS", "Leeds United": "LEE",
+  "Leicester City": "LEI", "Liverpool": "LIV", "Man City": "MCI", "Manchester City": "MCI",
+  "Man United": "MUN", "Manchester United": "MUN", "Newcastle": "NEW", "Newcastle United": "NEW",
+  "Nottingham": "NOT", "Nottingham Forest": "NFO", "Southampton": "SOU", "Sunderland": "SUN",
+  "Spurs": "TOT", "Tottenham": "TOT", "Tottenham Hotspur": "TOT", "West Ham": "WHU",
+  "West Ham United": "WHU", "Wolves": "WOL", "Wolverhampton Wanderers": "WOL"
+} %}
+{{ team_badge(team_codes.get(name, name[:3]|upper), "neutral") }}
+{%- endmacro %}
+
+{% macro team_identity(fixture, side, align="start") -%}
+{% set team_name = display_team(fixture, side) %}
+{% set badge_label = fixture[side ~ '_team_tla'] or team_name[:3]|upper %}
+<span class="team-identity team-identity--{{ align }}">
+  {% if align == "end" %}
+    <strong class="team-name">{{ team_name }}</strong>{{ team_badge(badge_label, side) }}
+  {% else %}
+    {{ team_badge(badge_label, side) }}<strong class="team-name">{{ team_name }}</strong>
+  {% endif %}
+</span>
+{%- endmacro %}
+
+{% macro fixture_matchup(fixture, middle_label="vs") -%}
+<span class="fixture-matchup">
+  {{ team_identity(fixture, "home", "end") }}
+  {% if middle_label == "vs" %}
+    <span class="fixture-versus">vs</span>
+  {% else %}
+    {% set score_parts = middle_label.split('–') %}
+    <span class="fixture-score"><strong>{{ score_parts[0] }}</strong><span>–</span><strong>{{ score_parts[1] }}</strong></span>
+  {% endif %}
+  {{ team_identity(fixture, "away", "start") }}
+</span>
+{%- endmacro %}

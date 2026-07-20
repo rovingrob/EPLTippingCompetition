@@ -1,0 +1,56 @@
+@media (max-width: 900px) {
+  main { padding: 32px 24px; }
+  .site-header { align-items: flex-start; flex-direction: column; gap: 12px; padding: 16px 24px; }
+  .site-header-actions { width: 100%; }
+  nav { width: 100%; }
+  .page-head { align-items: flex-start; flex-direction: column; }
+  .page-head-actions { width: 100%; justify-content: flex-start; }
+  .metric-grid, .page-simulation .metric-grid { grid-template-columns: repeat(2, 1fr); }
+  .fixture-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .fixture-hero-team .team-name { font-size: 24px; }
+  .fixture-hero-team .team-badge { height: 36px; width: 36px; }
+  .fixture-hero-score strong { font-size: 32px; }
+  .admin-grid, .split, .form-grid.columns, .form-grid.columns.endpoint-form { grid-template-columns: 1fr; }
+  .snake-head { align-items: flex-start; flex-direction: column; }
+  .today-date-actions { margin-left: 0; }
+}
+
+@media (max-width: 820px) {
+  .fixture-analysis-row { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 560px) {
+  main { padding: 24px 16px 32px; }
+  .site-header { padding: 14px 16px; }
+  .brand { width: 100%; }
+  .site-header-actions { align-items: flex-start; }
+  nav { display: grid; grid-template-columns: repeat(2, 1fr); }
+  nav a { text-align: center; }
+  h1 { font-size: 28px; }
+  .metric-grid, .page-simulation .metric-grid { grid-template-columns: 1fr; }
+  .panel, .leaderboard-snake { padding: 20px; }
+  .toolbar { padding: 16px; }
+  .page-head { gap: 20px; }
+  .page-head-actions, .page-head-actions .actions, .page-head-actions .button { width: 100%; }
+  .page-head-actions .actions > *, .page-head-actions .actions form, .page-head-actions .actions button { flex: 1; }
+  .fixture-hero { padding: 20px; }
+  .fixture-hero-meta { align-items: flex-start; flex-direction: column; }
+  .fixture-hero-actions, .fixture-hero-actions .button { width: 100%; }
+  .fixture-hero-actions .button { flex: 1; }
+  .fixture-hero-matchup { gap: 8px; grid-template-columns: minmax(0, 1fr) 86px minmax(0, 1fr); }
+  .fixture-hero-team .team-identity { gap: 8px; min-width: 0; }
+  .fixture-hero-team .team-name { font-size: 17px; }
+  .fixture-hero-team .team-badge { height: 22px; width: 22px; }
+  .fixture-hero-score strong { font-size: 23px; }
+  .fixture-kpi-grid { grid-template-columns: 1fr; }
+  .fixture-analysis-card { padding: 20px; }
+  .fixture-analysis-head { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .fixture-analysis-head p { text-align: left; }
+  .outcome-row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; }
+  .outcome-label { grid-column: 1 / -1; }
+  .outcome-progress { grid-column: 1; }
+  .outcome-value { grid-column: 2; }
+  .fixture-table-controls { align-items: flex-start; flex-direction: column; }
+  .prediction-filters { width: 100%; }
+  .leaderboard-pagination { align-items: flex-start; flex-direction: column; }
+}

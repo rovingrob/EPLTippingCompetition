@@ -64,6 +64,7 @@ def test_root_pages_assets_and_security_headers_are_served_under_prefix(tmp_path
         "/tipping/api/leaderboard",
         "/tipping/healthz",
         "/tipping/static/styles.css",
+        "/tipping/static/theme-init.js",
         "/tipping/favicon.ico",
     ]:
         assert client.get(path).status_code == 200, path
@@ -72,6 +73,12 @@ def test_root_pages_assets_and_security_headers_are_served_under_prefix(tmp_path
     assert "Premier League Schedule" in page.text
     assert 'href="/tipping/static/styles.css?v=' in page.text
     assert 'src="/tipping/static/app.js?v=' in page.text
+    assert 'src="/tipping/static/theme-init.js?v=' in page.text
+    assert page.text.index("theme-init.js") < page.text.index("styles.css")
+    assert 'data-theme-toggle' in page.text
+    assert 'aria-label="Switch to light theme"' in page.text
+    assert "Times shown in" not in page.text
+    assert "Competition rules" not in page.text
     assert "frame-ancestors 'none'" in page.headers["content-security-policy"]
     assert page.headers["x-frame-options"] == "DENY"
     assert page.headers["x-content-type-options"] == "nosniff"
@@ -104,6 +111,10 @@ def test_schedule_health_and_leaderboard_apis_use_epl_store(tmp_path, monkeypatc
     schedule = client.get("/tipping/schedule.json")
     assert [row["match_id"] for row in schedule.json()] == ["fd-1", "fd-2"]
     assert schedule.headers["content-disposition"] == 'attachment; filename="epl-schedule.json"'
+    schedule_page = client.get("/tipping/")
+    assert 'data-filter-key="matchday"' in schedule_page.text
+    assert '<option value="1">Matchday 1</option>' in schedule_page.text
+    assert 'data-matchday="1"' in schedule_page.text
     assert client.get("/tipping/api/fixtures").json() == schedule.json()
     assert client.get("/tipping/api/leaderboard").json()[0] | {"rank": 1} == {
         "contestant_id": "alpha",
@@ -135,23 +146,28 @@ def test_public_pages_redact_pre_lock_predictions_but_admin_can_see_them(
     store.write("predictions.json", [prediction()])
     client = TestClient(app)
 
-    public_paths = [
-        "/tipping/",
-        "/tipping/today?date=2099-08-15",
+    public_detail_paths = [
+        "/tipping/fixtures/fd-1001",
         "/tipping/leaderboard/alpha",
         "/tipping/leaderboard/alpha/tips",
     ]
-    for path in public_paths:
+    for path in public_detail_paths:
         response = client.get(path)
         assert response.status_code == 200
         assert "7–6" not in response.text
         assert "37%" not in response.text
         assert "Hidden" in response.text
 
+    for path in ["/tipping/", "/tipping/today?date=2099-08-15"]:
+        response = client.get(path)
+        assert response.status_code == 200
+        assert "7–6" not in response.text
+        assert 'href="/tipping/fixtures/fd-1001"' in response.text
+
     client.cookies.set("admin_session", encrypt_admin_cookie(), path="/tipping")
-    admin_schedule = client.get("/tipping/")
+    admin_fixture = client.get("/tipping/fixtures/fd-1001")
     admin_tips = client.get("/tipping/leaderboard/alpha/tips")
-    assert "7–6" in admin_schedule.text
+    assert "7–6" in admin_fixture.text
     assert "7–6" in admin_tips.text
     assert "37%" in admin_tips.text
 
@@ -170,7 +186,7 @@ def test_predictions_are_public_at_or_after_lock(tmp_path, monkeypatch, make_fix
     assert "Hidden" not in response.text
 
 
-def test_completed_future_dated_fixture_predictions_are_public_in_schedule(
+def test_completed_future_dated_fixture_predictions_are_public_on_fixture_page(
     tmp_path,
     monkeypatch,
     make_fixture,
@@ -195,8 +211,13 @@ def test_completed_future_dated_fixture_predictions_are_public_in_schedule(
         [{"contestant_id": "alpha", "match_id": "fd-1001", "points": 0.0, "reason": "incorrect_result"}],
     )
 
-    response = TestClient(app).get("/tipping/")
+    client = TestClient(app)
+    schedule = client.get("/tipping/")
+    response = client.get("/tipping/fixtures/fd-1001")
 
+    assert schedule.status_code == 200
+    assert 'href="/tipping/fixtures/fd-1001"' in schedule.text
+    assert "7–6" not in schedule.text
     assert response.status_code == 200
     assert "7–6" in response.text
     assert "37%" in response.text
@@ -207,7 +228,7 @@ def test_completed_future_dated_fixture_predictions_are_public_in_schedule(
     assert "Points" in response.text
 
 
-def test_today_restores_navigation_sorting_and_detailed_predictions(
+def test_today_links_to_separate_prediction_detail_screen(
     tmp_path,
     monkeypatch,
     make_fixture,
@@ -232,21 +253,93 @@ def test_today_restores_navigation_sorting_and_detailed_predictions(
         [{"contestant_id": "alpha", "match_id": "fd-1001", "points": 0.0, "reason": "incorrect_result"}],
     )
 
-    response = TestClient(app).get("/tipping/today?date=2099-08-15&tz=UTC")
+    client = TestClient(app)
+    response = client.get("/tipping/today?date=2099-08-15&tz=UTC")
 
     assert response.status_code == 200
     assert "1 fixtures" in response.text
+    assert 'type="date" name="date" value="2099-08-15"' in response.text
     assert 'aria-label="Previous day"' in response.text
     assert 'aria-label="Next day"' in response.text
     assert 'data-sortable-table' in response.text
     assert 'data-sort-key="kickoff"' in response.text
-    assert 'data-expandable-row' in response.text
-    assert 'id="today-fixture-predictions-fd-1001"' in response.text
-    assert "7–6" in response.text
-    assert "Confidence" in response.text
-    assert "Response" in response.text
-    assert "Outcome" in response.text
-    assert "Points" in response.text
+    assert 'data-sortable-row' in response.text
+    assert 'href="/tipping/fixtures/fd-1001"' in response.text
+    assert "7–6" not in response.text
+
+    detail = client.get("/tipping/fixtures/fd-1001")
+    assert detail.status_code == 200
+    assert "7–6" in detail.text
+    assert "Confidence" in detail.text
+    assert "Response" in detail.text
+    assert "Outcome" in detail.text
+    assert "Points" in detail.text
+
+
+def test_fixture_detail_renders_prediction_insights_heatmap_and_filters(
+    tmp_path,
+    monkeypatch,
+    make_fixture,
+) -> None:
+    store = configure_app_store(tmp_path, monkeypatch)
+    store.write(
+        "fixtures.json",
+        [
+            make_fixture(
+                kickoff_at="2099-08-15T14:00:00Z",
+                status="completed",
+                source_status="FINISHED",
+                score_home=1,
+                score_away=0,
+            )
+        ],
+    )
+    store.write("registry.json", [endpoint("alpha"), endpoint("beta"), endpoint("gamma")])
+
+    prediction_rows = []
+    for contestant_id, home_score, away_score, confidence in [
+        ("alpha", 1, 0, 0.9),
+        ("beta", 2, 1, 0.6),
+        ("gamma", 0, 1, 0.3),
+    ]:
+        row = prediction()
+        row["id"] = f"prediction-{contestant_id}"
+        row["contestant_id"] = contestant_id
+        row["prediction"] = {
+            "predicted_score_home": home_score,
+            "predicted_score_away": away_score,
+            "confidence": confidence,
+        }
+        row["raw_response"] = dict(row["prediction"])
+        prediction_rows.append(row)
+    store.write("predictions.json", prediction_rows)
+    store.write(
+        "scores.json",
+        [
+            {"contestant_id": "alpha", "match_id": "fd-1001", "points": 1.5, "reason": "exact_score"},
+            {"contestant_id": "beta", "match_id": "fd-1001", "points": 1.0, "reason": "correct_result"},
+            {"contestant_id": "gamma", "match_id": "fd-1001", "points": 0.0, "reason": "incorrect_result"},
+        ],
+    )
+
+    response = TestClient(app).get("/tipping/fixtures/fd-1001")
+
+    assert response.status_code == 200
+    assert "3 of 3 submitted" in response.text
+    assert "67% picked win" in response.text
+    assert "2.5 pts awarded" in response.text
+    assert 'class="fixture-analysis-row"' in response.text
+    assert 'class="fixture-analysis-card outcome-distribution"' in response.text
+    assert 'class="fixture-analysis-card scoreline-spread"' in response.text
+    assert response.text.count('class="outcome-row is-actual"') == 1
+    assert "✓ result" not in response.text
+    assert 'data-prediction-filter="correct"' in response.text
+    assert 'data-prediction-filter="exact"' in response.text
+    assert 'data-prediction-outcome="exact"' in response.text
+    assert 'data-prediction-outcome="correct"' in response.text
+    assert "Most confident correct" not in response.text
+    assert "Boldest miss" not in response.text
+    assert response.text.index("Alpha Model") < response.text.index("Beta") < response.text.index("Gamma")
 
 
 def test_today_uses_requested_user_timezone_for_fixture_date(
@@ -263,9 +356,9 @@ def test_today_uses_requested_user_timezone_for_fixture_date(
     invalid = client.get("/tipping/today?date=2026-08-15&tz=not-a-timezone")
 
     assert 'data-today-timezone="Australia/Sydney"' in sydney.text
-    assert 'today-fixture-predictions-fd-1001' in sydney.text
+    assert 'href="/tipping/fixtures/fd-1001"' in sydney.text
     assert 'data-today-timezone="America/New_York"' in new_york.text
-    assert 'today-fixture-predictions-fd-1001' not in new_york.text
+    assert 'href="/tipping/fixtures/fd-1001"' not in new_york.text
     assert 'data-today-timezone="UTC"' in invalid.text
 
 
@@ -295,6 +388,35 @@ def test_leaderboard_renders_interactive_snake(tmp_path, monkeypatch, make_fixtu
     assert "snake-chart" in response.text
     assert 'data-snake-contestant="alpha"' in response.text
     assert "Matchday 1: Arsenal vs Chelsea" in response.text
+
+
+def test_leaderboard_paginates_ten_contestants_and_preserves_overall_position(tmp_path, monkeypatch) -> None:
+    store = configure_app_store(tmp_path, monkeypatch)
+    store.write("registry.json", [endpoint(f"bot-{index:02d}") for index in range(23)])
+    client = TestClient(app)
+
+    first = client.get("/tipping/leaderboard")
+    assert first.status_code == 200
+    assert first.text.count('class="leaderboard-row') == 10
+    assert first.text.count("is-leader") == 1
+    assert "Showing 1–10 of 23 contestants" in first.text
+    assert 'href="/tipping/leaderboard?page=2"' in first.text
+    assert 'href="/tipping/leaderboard/bot-00"' in first.text
+    assert 'href="/tipping/leaderboard/bot-10"' not in first.text
+
+    second = client.get("/tipping/leaderboard?page=2")
+    assert second.status_code == 200
+    assert second.text.count('class="leaderboard-row') == 10
+    assert "is-leader" not in second.text
+    assert "Showing 11–20 of 23 contestants" in second.text
+    assert 'href="/tipping/leaderboard/bot-10"' in second.text
+    assert 'data-series-index="0"' in second.text
+
+    last = client.get("/tipping/leaderboard?page=999")
+    assert last.status_code == 200
+    assert last.text.count('class="leaderboard-row') == 3
+    assert "Showing 21–23 of 23 contestants" in last.text
+    assert 'aria-current="page">3</span>' in last.text
 
 
 def test_contestant_routes_and_api_test_render_fixture_only_payload(tmp_path, monkeypatch, make_fixture) -> None:

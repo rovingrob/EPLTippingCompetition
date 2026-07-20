@@ -1,0 +1,23 @@
+{% macro prediction_table(fixture, prediction_rows, table_id="fixture-prediction-table") -%}
+<div class="fixture-prediction-scroll">
+  <table id="{{ table_id }}" class="mini-table fixture-prediction-table" data-prediction-table>
+    <thead><tr><th>Contestant</th><th>Status</th><th>Prediction</th><th>Pick</th><th>Confidence</th><th>Response</th><th>Outcome</th><th>Points</th></tr></thead>
+    <tbody>
+    {% for row in prediction_rows %}
+      {% set score_reason = row.score.reason if row.score else "" %}
+      {% set outcome_filter = "exact" if score_reason == "exact_score" else "correct" if score_reason == "correct_result" else "other" %}
+      <tr class="prediction-row{% if outcome_filter == 'exact' %} is-exact{% elif outcome_filter == 'correct' %} is-correct{% endif %}" data-prediction-outcome="{{ outcome_filter }}">
+        <td><a href="{{ app_path('/leaderboard/' ~ row.contestant.id) }}"><strong>{{ row.contestant.name }}</strong></a></td>
+        <td><span class="pill prediction-status">{{ row.contestant.status }}</span></td>
+        <td>{% if row.hidden %}<span class="muted">Hidden until lock</span>{% elif row.prediction %}<span class="score">{{ row.prediction.predicted_score_home }}–{{ row.prediction.predicted_score_away }}</span>{% elif row.prediction_record and not row.prediction_record.valid %}<span class="error">Invalid response</span>{% else %}<span class="muted">No prediction</span>{% endif %}</td>
+        <td>{% if row.hidden or not row.prediction %}<span class="muted">—</span>{% elif row.prediction.predicted_score_home > row.prediction.predicted_score_away %}{{ display_team(fixture, 'home') }}{% elif row.prediction.predicted_score_away > row.prediction.predicted_score_home %}{{ display_team(fixture, 'away') }}{% else %}Draw{% endif %}</td>
+        <td class="prediction-confidence">{% if not row.hidden and row.prediction and row.prediction.confidence is not none %}{{ "%.0f"|format(row.prediction.confidence * 100) }}%{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td>{% if row.hidden %}<span class="muted">Private</span>{% elif row.prediction_record and row.prediction_record.valid %}<span class="pill valid">valid</span>{% elif row.prediction_record %}<span class="pill warning">invalid</span>{% if row.prediction_record.error %}<span class="fixture-error">{{ row.prediction_record.error }}</span>{% endif %}{% else %}<span class="muted">No response</span>{% endif %}</td>
+        <td>{% if row.score %}<span class="pill prediction-outcome {{ outcome_filter }}">{{ score_reason|replace('_', ' ') }}</span>{% else %}<span class="muted">Unscored</span>{% endif %}</td>
+        <td class="prediction-points {{ outcome_filter }}">{% if row.score %}<strong>{{ "%.1f"|format(row.score.points) }}</strong>{% else %}<span class="muted">—</span>{% endif %}</td>
+      </tr>
+    {% else %}<tr><td colspan="8" class="empty">No contestants registered.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{%- endmacro %}

@@ -17,18 +17,18 @@ from .models import (
 CORRECT_RESULT_POINTS = 1.0
 EXACT_SCORE_POINTS = 1.5
 SNAKE_COLORS = [
-    "#0f766e",
-    "#2563eb",
-    "#d97706",
-    "#db2777",
-    "#7c3aed",
-    "#16a34a",
-    "#dc2626",
-    "#0891b2",
-    "#be123c",
-    "#4f46e5",
-    "#65a30d",
-    "#c2410c",
+    "#00ff87",
+    "#ff2882",
+    "#41c7ff",
+    "#ffd23f",
+    "#ff7a45",
+    "#7c5cff",
+    "#23c4c4",
+    "#fb4e6d",
+    "#a78bfa",
+    "#2dd4bf",
+    "#f59e0b",
+    "#f472b6",
 ]
 SNAKE_POINT_SCALE_RANK_WEIGHT = 0.45
 
@@ -491,7 +491,14 @@ def leaderboard_snake(
     color_by_id = {
         contestant_id: SNAKE_COLORS[index % len(SNAKE_COLORS)]
         for index, contestant_id in enumerate(
-            sorted(contestants, key=lambda item: (contestants[item]["name"].casefold(), item))
+            sorted(
+                contestants,
+                key=lambda item: (
+                    history_by_id[item][-1]["place"],
+                    contestants[item]["name"].casefold(),
+                    item,
+                ),
+            )
         )
     }
     contestant_rows = []

@@ -1,0 +1,32 @@
+.table-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); scrollbar-color: var(--scrollbar-thumb) var(--paper); }
+.page-schedule .toolbar + .table-wrap { border-top: 0; border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+table { width: 100%; border-collapse: collapse; }
+th, td { border-bottom: 1px solid var(--line); padding: 12px 16px; text-align: left; vertical-align: middle; white-space: nowrap; }
+th { height: 40px; background: var(--paper); color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+td { height: 56px; color: var(--text-secondary); font-size: 13px; }
+td strong { color: var(--ink); }
+td time[data-utc] { font-family: var(--font-mono); }
+th button[data-sort-key] { min-height: 0; background: transparent; color: inherit; font-size: inherit; letter-spacing: inherit; padding: 0; text-transform: inherit; }
+th button[data-sort-key]:hover { background: transparent; color: var(--green); text-decoration: none; }
+th button[data-direction="asc"]::after { content: " ↑"; }
+th button[data-direction="desc"]::after { content: " ↓"; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr { transition: background 120ms ease; }
+tbody tr:hover { background: var(--neutral-soft); }
+tr.europe td:first-child { border-left: 4px solid var(--blue); }
+tr.relegation td:first-child { border-left: 4px solid var(--red); }
+.points-cell { font-variant-numeric: tabular-nums; }
+.fixture-matchup-heading, .fixture-matchup-cell { text-align: center; }
+
+.fixture-number-cell { white-space: nowrap; }
+.fixture-details-link { align-items: center; color: var(--green); display: inline-flex; font-weight: 700; gap: 6px; text-decoration: none; }
+.fixture-details-link:hover { color: var(--green-hover); text-decoration: none; }
+.fixture-matchup-link { border-radius: var(--radius-sm); color: inherit; display: block; text-decoration: none; }
+.fixture-matchup-link:hover { background: var(--green-soft); text-decoration: none; }
+.fixture-matchup-link:focus-visible { outline-offset: 5px; }
+.fixture-predictions-head { align-items: center; display: flex; gap: 16px; justify-content: space-between; }
+.fixture-prediction-scroll { overflow-x: auto; }
+.fixture-prediction-table { min-width: 1050px; }
+.mini-table th, .mini-table td { padding: 9px 12px; }
+.mini-table td { white-space: nowrap; }
+.fixture-error { color: var(--red); display: block; font-size: 12px; max-width: 260px; overflow-wrap: anywhere; white-space: normal; }

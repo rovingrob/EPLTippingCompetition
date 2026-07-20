@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% from "components/ui.html" import metric_card, status_pill %}
+{% from "components/fixtures.html" import team_badge, team_identity %}
+{% from "components/predictions.html" import prediction_table %}
+{% set home_name = display_team(fixture, 'home') %}
+{% set away_name = display_team(fixture, 'away') %}
+{% set title = home_name ~ " vs " ~ away_name %}
+{% block body_class %}page-fixture{% endblock %}
+{% block content %}
+<section class="fixture-hero">
+  <div class="fixture-hero-meta">
+    <div class="fixture-hero-state">
+      <p class="eyebrow">{% if fixture.matchday %}Matchday {{ fixture.matchday }}{% else %}Fixture details{% endif %}</p>
+      {{ status_pill(fixture.status|replace('_', ' '), fixture.status) }}
+      {% if fixture.result_source == "manual" %}{{ status_pill("manual", "warning") }}{% endif %}
+    </div>
+    <div class="actions fixture-hero-actions">
+      <a class="button secondary" href="{{ app_path('/') }}">Back to schedule</a>
+      <a class="button secondary" href="{{ app_path('/today') }}">Today</a>
+    </div>
+  </div>
+
+  <div class="fixture-hero-matchup">
+    <div class="fixture-hero-team fixture-hero-home">{{ team_identity(fixture, "home", "end") }}</div>
+    <div class="fixture-hero-score">
+      {% if is_completed_fixture(fixture) %}
+        <strong>{{ fixture.score_home }} – {{ fixture.score_away }}</strong>
+        <span>Full time</span>
+      {% elif fixture.status == "postponed" %}
+        <strong>P – P</strong>
+        <span>Postponed</span>
+      {% else %}
+        <strong>vs</strong>
+        <span>{{ fixture.status|replace('_', ' ') }}</span>
+      {% endif %}
+    </div>
+    <div class="fixture-hero-team fixture-hero-away">{{ team_identity(fixture, "away", "start") }}</div>
+  </div>
+
+  <div class="fixture-hero-kickoff">
+    <time data-utc="{{ fixture.kickoff_at or '' }}">{{ fixture.kickoff_at or "Kickoff TBC" }}</time>
+  </div>
+</section>
+
+{% if not fixture_insights.hidden %}
+<section class="fixture-kpi-grid" aria-label="Fixture prediction summary">
+  {{ metric_card("Predictions", fixture_insights.submitted_count, fixture_insights.predictions_detail) }}
+  {{ metric_card("Consensus", fixture_insights.consensus_value, fixture_insights.consensus_detail) }}
+  {{ metric_card("Most predicted", fixture_insights.most_scoreline, fixture_insights.most_scoreline_detail) }}
+  {{ metric_card("Avg confidence", fixture_insights.average_confidence, fixture_insights.average_confidence_detail) }}
+  {{ metric_card("Correct result", fixture_insights.correct_count, fixture_insights.correct_detail) }}
+</section>
+
+{% if fixture_insights.valid_count %}
+<section class="fixture-analysis-row" aria-label="Prediction analysis">
+  <article class="fixture-analysis-card outcome-distribution">
+    <header class="fixture-analysis-head">
+      <h2>Predicted outcome</h2>
+      <p>{{ fixture_insights.actual_result_label }}</p>
+    </header>
+    <div class="outcome-list">
+      {% for outcome in fixture_insights.outcomes %}
+      <div class="outcome-row{% if outcome.is_actual %} is-actual{% endif %}">
+        <div class="outcome-label">
+          {% if outcome.key == "home" %}{{ team_badge(fixture.home_team_tla or home_name[:3]|upper, "home") }}{% endif %}
+          {% if outcome.key == "away" %}{{ team_badge(fixture.away_team_tla or away_name[:3]|upper, "away") }}{% endif %}
+          <span>{{ outcome.label }}</span>
+        </div>
+        <progress class="outcome-progress outcome-{{ outcome.key }}" max="{{ fixture_insights.valid_count }}" value="{{ outcome.count }}">{{ outcome.percent }}%</progress>
+        <div class="outcome-value"><strong>{{ outcome.count }} · {{ outcome.percent }}%</strong></div>
+      </div>
+      {% endfor %}
+    </div>
+  </article>
+
+  <article class="fixture-analysis-card scoreline-spread">
+    <header class="scoreline-head">
+      <h2>Scoreline spread</h2>
+      <p>Rows = home goals · columns = away goals</p>
+    </header>
+    <div class="scoreline-scroll">
+      <table class="scoreline-heatmap" aria-label="Predicted scoreline spread">
+        <thead><tr><th scope="col"></th>{% for label in fixture_insights.heatmap_labels %}<th scope="col">{{ label }}</th>{% endfor %}</tr></thead>
+        <tbody>
+          {% for heatmap_row in fixture_insights.heatmap_rows %}
+          <tr>
+            <th scope="row">{{ heatmap_row.label }}</th>
+            {% for cell in heatmap_row.cells %}
+            <td><span class="scoreline-cell level-{{ cell.level }}{% if cell.is_actual %} is-actual{% endif %}">{% if cell.count %}{{ cell.count }}{% endif %}</span></td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="scoreline-legend"><span><i class="legend-swatch more"></i>More predicted</span>{% if is_completed_fixture(fixture) %}<span><i class="legend-swatch actual"></i>Actual {{ fixture.score_home }}–{{ fixture.score_away }}</span>{% endif %}</div>
+  </article>
+</section>
+{% endif %}
+{% endif %}
+
+<section class="fixture-prediction-section">
+  <div class="fixture-table-controls">
+    <h2>All predictions</h2>
+    {% if not fixture_insights.hidden %}
+    <div class="prediction-filters" data-prediction-filters data-table-id="fixture-prediction-table">
+      <span>Filter</span>
+      <button type="button" class="prediction-filter is-active" data-prediction-filter="all" aria-pressed="true">All</button>
+      <button type="button" class="prediction-filter" data-prediction-filter="correct" aria-pressed="false">Correct</button>
+      <button type="button" class="prediction-filter" data-prediction-filter="exact" aria-pressed="false">Exact</button>
+    </div>
+    {% endif %}
+  </div>
+  <div class="table-wrap fixture-detail-predictions">
+    {% if fixture_insights.hidden %}<div class="prediction-private-notice"><span class="pill">Hidden until lock</span><p>Predictions will appear here once the fixture locks.</p></div>{% endif %}
+    {{ prediction_table(fixture, prediction_rows, "fixture-prediction-table") }}
+  </div>
+</section>
+{% endblock %}

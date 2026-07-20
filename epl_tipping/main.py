@@ -6,6 +6,7 @@ import hmac
 import json
 import os
 import re
+from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -53,6 +54,7 @@ PACKAGE_DIR = Path(__file__).resolve().parent
 BASE_PATH = "/tipping"
 DEFAULT_COMPETITION_TIMEZONE = "Australia/Sydney"
 DEFAULT_LOCK_MINUTES = 30
+LEADERBOARD_PAGE_SIZE = 10
 
 app = FastAPI(title="EPL Tipping Competition")
 
@@ -235,7 +237,6 @@ def load_context(request: Request) -> dict[str, Any]:
         "run_log": run_log,
         "latest_simulations": {row["id"]: latest_simulation(simulations, row["id"]) for row in registry},
         "latest_simulation_runs": {row["id"]: latest_simulation_run(simulation_runs, row["id"]) for row in registry},
-        "fixture_prediction_rows": fixture_prediction_rows(fixtures, registry, predictions, scores, admin),
         "is_admin": admin,
         "admin_auth_configured": admin_auth_configured(),
         "message": request.query_params.get("message"),
@@ -280,6 +281,170 @@ def fixture_prediction_rows(
             )
         rows[fixture["match_id"]] = fixture_rows
     return rows
+
+
+def fixture_prediction_insights(
+    fixture: dict[str, Any],
+    prediction_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    hidden = bool(prediction_rows and prediction_rows[0]["hidden"])
+    total_contestants = len(prediction_rows)
+    submitted_count = sum(1 for row in prediction_rows if row["prediction_record"] is not None)
+    visible_predictions = [
+        row
+        for row in prediction_rows
+        if not row["hidden"]
+        and row["prediction_record"] is not None
+        and row["prediction_record"].get("valid")
+        and row["prediction"] is not None
+    ]
+
+    outcome_counts = {"home": 0, "draw": 0, "away": 0}
+    scoreline_counts: Counter[tuple[int, int]] = Counter()
+    confidence_values: list[float] = []
+    for row in visible_predictions:
+        prediction = row["prediction"]
+        home_score = int(prediction["predicted_score_home"])
+        away_score = int(prediction["predicted_score_away"])
+        scoreline_counts[(home_score, away_score)] += 1
+        if home_score > away_score:
+            outcome_counts["home"] += 1
+        elif away_score > home_score:
+            outcome_counts["away"] += 1
+        else:
+            outcome_counts["draw"] += 1
+        confidence = prediction.get("confidence")
+        if isinstance(confidence, (int, float)) and not isinstance(confidence, bool):
+            confidence_values.append(float(confidence))
+
+    valid_count = len(visible_predictions)
+    home_name = display_team(fixture, "home")
+    away_name = display_team(fixture, "away")
+    outcome_labels = {
+        "home": home_name,
+        "draw": "Draw",
+        "away": away_name,
+    }
+    outcome_order = ["home", "draw", "away"]
+    consensus_key = max(outcome_order, key=lambda key: (outcome_counts[key], -outcome_order.index(key)))
+    consensus_count = outcome_counts[consensus_key]
+    consensus_percent = round(consensus_count * 100 / valid_count) if valid_count else 0
+    consensus_value = outcome_labels[consensus_key] if valid_count else "No data"
+    consensus_detail = (
+        f"{consensus_percent}% picked {'draw' if consensus_key == 'draw' else 'win'}"
+        if valid_count
+        else "No valid predictions"
+    )
+
+    most_scoreline = None
+    most_scoreline_count = 0
+    if scoreline_counts:
+        most_scoreline, most_scoreline_count = min(
+            scoreline_counts.items(),
+            key=lambda item: (-item[1], item[0][0] + item[0][1], item[0]),
+        )
+
+    average_confidence = round(sum(confidence_values) * 100 / len(confidence_values)) if confidence_values else None
+    exact_count = sum(1 for row in prediction_rows if (row.get("score") or {}).get("reason") == "exact_score")
+    correct_count = sum(
+        1
+        for row in prediction_rows
+        if (row.get("score") or {}).get("reason") in {"exact_score", "correct_result"}
+    )
+    points_awarded = sum(float((row.get("score") or {}).get("points") or 0) for row in prediction_rows)
+    completed = is_completed_fixture(fixture)
+    actual_outcome = None
+    if completed:
+        actual_home = int(fixture["score_home"])
+        actual_away = int(fixture["score_away"])
+        actual_outcome = "home" if actual_home > actual_away else "away" if actual_away > actual_home else "draw"
+
+    outcomes = []
+    for key in outcome_order:
+        count = outcome_counts[key]
+        outcomes.append(
+            {
+                "key": key,
+                "label": outcome_labels[key],
+                "count": count,
+                "percent": round(count * 100 / valid_count) if valid_count else 0,
+                "is_actual": key == actual_outcome,
+            }
+        )
+
+    bucket_labels = ["0", "1", "2", "3", "4+"]
+    bucket_counts = [[0 for _ in bucket_labels] for _ in bucket_labels]
+    for (home_score, away_score), count in scoreline_counts.items():
+        bucket_counts[min(home_score, 4)][min(away_score, 4)] += count
+    maximum_bucket = max((count for row in bucket_counts for count in row), default=0)
+    actual_bucket = (
+        (min(int(fixture["score_home"]), 4), min(int(fixture["score_away"]), 4))
+        if completed
+        else None
+    )
+    heatmap_rows = []
+    for home_index, row_counts in enumerate(bucket_counts):
+        cells = []
+        for away_index, count in enumerate(row_counts):
+            if count == 0 or maximum_bucket == 0:
+                level = 0
+            elif count == maximum_bucket:
+                level = 4
+            else:
+                ratio = count / maximum_bucket
+                level = 3 if ratio >= 0.6 else 2 if ratio >= 0.35 else 1
+            cells.append(
+                {
+                    "count": count,
+                    "level": level,
+                    "is_actual": actual_bucket == (home_index, away_index),
+                }
+            )
+        heatmap_rows.append({"label": bucket_labels[home_index], "cells": cells})
+
+    return {
+        "hidden": hidden,
+        "total_contestants": total_contestants,
+        "submitted_count": submitted_count,
+        "valid_count": valid_count,
+        "predictions_detail": f"{submitted_count} of {total_contestants} submitted",
+        "consensus_value": consensus_value,
+        "consensus_detail": consensus_detail,
+        "most_scoreline": f"{most_scoreline[0]}–{most_scoreline[1]}" if most_scoreline else "—",
+        "most_scoreline_detail": (
+            f"{most_scoreline_count} {'bot' if most_scoreline_count == 1 else 'bots'}"
+            if most_scoreline
+            else "No valid predictions"
+        ),
+        "average_confidence": f"{average_confidence}%" if average_confidence is not None else "—",
+        "average_confidence_detail": (
+            f"across {len(confidence_values)} {'bot' if len(confidence_values) == 1 else 'bots'}"
+            if confidence_values
+            else "No confidence values"
+        ),
+        "correct_count": str(correct_count) if completed else "—",
+        "correct_detail": f"incl. {exact_count} exact" if completed else "Awaiting result",
+        "exact_count": exact_count,
+        "points_awarded": points_awarded,
+        "actual_result_label": (
+            f"Actual result: {home_name} {fixture['score_home']}–{fixture['score_away']} · {points_awarded:.1f} pts awarded"
+            if completed
+            else "Actual result pending"
+        ),
+        "outcomes": outcomes,
+        "heatmap_labels": bucket_labels,
+        "heatmap_rows": heatmap_rows,
+    }
+
+
+def fixture_prediction_sort_key(row: dict[str, Any]) -> tuple[float, int, float, str]:
+    score = row.get("score") or {}
+    prediction = row.get("prediction") or {}
+    points = float(score.get("points") or 0)
+    submitted = 1 if row.get("prediction_record") is not None else 0
+    confidence = prediction.get("confidence")
+    confidence_value = float(confidence) if isinstance(confidence, (int, float)) and not isinstance(confidence, bool) else -1
+    return (-points, -submitted, -confidence_value, str(row["contestant"].get("name") or "").casefold())
 
 
 def contestant_rows(
@@ -357,15 +522,13 @@ def today_page(
     context.update(
         today_games={
             "date": target.isoformat(),
+            "date_label": f"{target.day} {target.strftime('%B %Y')}",
             "is_today": target == today,
             "previous_date": (target - timedelta(days=1)).isoformat(),
             "next_date": (target + timedelta(days=1)).isoformat(),
             "timezone": getattr(timezone, "key", "UTC"),
             "fixtures": fixtures,
-        },
-        today_prediction_rows={
-            fixture["match_id"]: context["fixture_prediction_rows"][fixture["match_id"]]
-            for fixture in fixtures
+            "matchday": next((fixture.get("matchday") for fixture in fixtures if fixture.get("matchday")), None),
         },
     )
     return templates.TemplateResponse(request, "today.html", context)
@@ -376,9 +539,49 @@ def prefixed_favicon():
     return root_favicon()
 
 
+@router.get("/fixtures/{match_id}")
+def fixture_page(request: Request, match_id: str):
+    context = load_context(request)
+    fixture = next((row for row in context["fixtures"] if row.get("match_id") == match_id), None)
+    if fixture is None:
+        raise HTTPException(status_code=404, detail="Fixture not found")
+    prediction_rows = fixture_prediction_rows(
+        [fixture],
+        context["registry"],
+        context["predictions"],
+        context["scores"],
+        context["is_admin"],
+    )[match_id]
+    insights = fixture_prediction_insights(fixture, prediction_rows)
+    if not insights["hidden"]:
+        prediction_rows.sort(key=fixture_prediction_sort_key)
+    context.update(fixture=fixture, prediction_rows=prediction_rows, fixture_insights=insights)
+    return templates.TemplateResponse(request, "fixture.html", context)
+
+
 @router.get("/leaderboard")
-def leaderboard_page(request: Request):
-    return templates.TemplateResponse(request, "leaderboard.html", load_context(request))
+def leaderboard_page(request: Request, page: int = Query(1, ge=1)):
+    context = load_context(request)
+    rows = context["leaderboard"]
+    total_items = len(rows)
+    page_count = max(1, (total_items + LEADERBOARD_PAGE_SIZE - 1) // LEADERBOARD_PAGE_SIZE)
+    current_page = min(page, page_count)
+    offset = (current_page - 1) * LEADERBOARD_PAGE_SIZE
+    context.update(
+        leaderboard_page=rows[offset : offset + LEADERBOARD_PAGE_SIZE],
+        leaderboard_pagination={
+            "current_page": current_page,
+            "first_item": offset + 1 if total_items else 0,
+            "last_item": min(offset + LEADERBOARD_PAGE_SIZE, total_items),
+            "next_page": current_page + 1 if current_page < page_count else None,
+            "offset": offset,
+            "page_count": page_count,
+            "pages": list(range(1, page_count + 1)),
+            "previous_page": current_page - 1 if current_page > 1 else None,
+            "total_items": total_items,
+        },
+    )
+    return templates.TemplateResponse(request, "leaderboard.html", context)
 
 
 @router.get("/leaderboard/{contestant_id}")

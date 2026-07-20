@@ -1,12 +1,14 @@
 {% extends "base.html" %}
+{% from "components/ui.html" import page_header, status_pill %}
 {% set title = "EPL Leaderboard" %}
+{% block body_class %}page-leaderboard{% endblock %}
 {% block content %}
-<section class="page-head"><div><p class="eyebrow">Bot competition</p><h1>Leaderboard</h1><p>One point for the correct result; 1.5 points total for an exact score.</p></div></section>
+{{ page_header("Leaderboard", "Bot competition", "One point for the correct result; 1.5 points total for an exact score.") }}
 
 <section class="panel leaderboard-snake" data-leaderboard-snake>
   <div class="snake-head">
     <div>
-      <h2>Leaderboard snake</h2>
+      <h2>Leaderboard snake · every matchday</h2>
       {% if leaderboard_snake.checkpoints %}
         <p class="muted">Through {{ leaderboard_snake.latest_scored_checkpoint.label }} · {{ leaderboard_snake.remaining_count }} matches left</p>
       {% else %}
@@ -68,12 +70,37 @@
 <table>
   <thead><tr><th>Rank</th><th>Contestant</th><th>Status</th><th>Scored</th><th>Exact</th><th>Points</th><th>Tools</th></tr></thead>
   <tbody>
-  {% for row in leaderboard %}
+  {% for row in leaderboard_page %}
     {% set simulation = latest_simulations.get(row.contestant_id) %}
-    <tr data-contestant-id="{{ row.contestant_id }}"><td><span class="rank">{{ row.rank }}</span></td><td><a href="{{ app_path('/leaderboard/' ~ row.contestant_id) }}"><strong>{{ row.name }}</strong></a></td><td><span class="pill">{{ row.status }}</span></td><td>{{ row.scored_matches }}</td><td>{{ row.exact_scores }}</td><td><strong>{{ "%.1f"|format(row.total_points) }}</strong></td>
-      <td><div class="actions"><a class="button small secondary" href="{{ app_path('/leaderboard/' ~ row.contestant_id ~ '/tips') }}">Tips</a>{% if is_admin %}<a class="button small secondary" href="{{ app_path('/leaderboard/' ~ row.contestant_id ~ '/api-test') }}">Test</a>{% endif %}<a class="button small secondary" href="{{ app_path('/leaderboard/' ~ row.contestant_id ~ '/simulation') }}">View</a><form action="{{ app_path('/simulations/run') }}" method="post"><input type="hidden" name="contestant_id" value="{{ row.contestant_id }}"><button class="small" type="submit">Simulate</button></form></div>{% if simulation %}<span class="simulation-summary">Predicted winner: <strong>{{ simulation.champion or "TBD" }}</strong></span>{% else %}<span class="simulation-summary muted">Not simulated yet</span>{% endif %}</td></tr>
+    <tr class="leaderboard-row{% if leaderboard_pagination.offset == 0 and loop.first %} is-leader{% endif %}" data-contestant-id="{{ row.contestant_id }}" data-series-index="{{ (leaderboard_pagination.offset + loop.index0) % 5 }}">
+      <td><span class="rank">{{ row.rank }}</span></td>
+      <td><a href="{{ app_path('/leaderboard/' ~ row.contestant_id) }}"><strong>{{ row.name }}</strong></a></td>
+      <td>{{ status_pill(row.status, row.status) }}</td>
+      <td>{{ row.scored_matches }}</td>
+      <td>{{ row.exact_scores }}</td>
+      <td class="points-cell"><strong>{{ "%.1f"|format(row.total_points) }}</strong></td>
+      <td>
+        <div class="actions row-actions">
+          <a class="button small secondary" href="{{ app_path('/leaderboard/' ~ row.contestant_id ~ '/tips') }}">Tips</a>
+          {% if is_admin %}<a class="button small secondary" href="{{ app_path('/leaderboard/' ~ row.contestant_id ~ '/api-test') }}">Test</a>{% endif %}
+          <a class="button small secondary" href="{{ app_path('/leaderboard/' ~ row.contestant_id ~ '/simulation') }}">View</a>
+          <form action="{{ app_path('/simulations/run') }}" method="post"><input type="hidden" name="contestant_id" value="{{ row.contestant_id }}"><button class="small" type="submit">Simulate</button></form>
+        </div>
+        {% if simulation %}<span class="simulation-summary">Predicted winner: <strong>{{ simulation.champion or "TBD" }}</strong></span>{% else %}<span class="simulation-summary muted">Not simulated yet</span>{% endif %}
+      </td>
+    </tr>
   {% else %}<tr><td colspan="7" class="empty">No contestants yet.</td></tr>{% endfor %}
   </tbody>
 </table>
 </section>
+{% if leaderboard_pagination.page_count > 1 %}
+<nav class="leaderboard-pagination" aria-label="Leaderboard pagination">
+  <span class="pagination-summary">Showing {{ leaderboard_pagination.first_item }}–{{ leaderboard_pagination.last_item }} of {{ leaderboard_pagination.total_items }} contestants</span>
+  <span class="pagination-links">
+    {% if leaderboard_pagination.previous_page %}<a class="pagination-link" href="{{ app_path('/leaderboard') }}?page={{ leaderboard_pagination.previous_page }}">Previous</a>{% else %}<span class="pagination-link is-disabled" aria-disabled="true">Previous</span>{% endif %}
+    {% for page_number in leaderboard_pagination.pages %}{% if page_number == leaderboard_pagination.current_page %}<span class="pagination-link is-current" aria-current="page">{{ page_number }}</span>{% else %}<a class="pagination-link" href="{{ app_path('/leaderboard') }}?page={{ page_number }}">{{ page_number }}</a>{% endif %}{% endfor %}
+    {% if leaderboard_pagination.next_page %}<a class="pagination-link" href="{{ app_path('/leaderboard') }}?page={{ leaderboard_pagination.next_page }}">Next</a>{% else %}<span class="pagination-link is-disabled" aria-disabled="true">Next</span>{% endif %}
+  </span>
+</nav>
+{% endif %}
 {% endblock %}

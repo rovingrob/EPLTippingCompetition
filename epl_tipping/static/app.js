@@ -1,3 +1,46 @@
+const THEME_STORAGE_KEY = "epl-tipping-theme";
+
+function storedTheme() {
+  try {
+    const value = window.localStorage.getItem(THEME_STORAGE_KEY);
+    return ["light", "dark"].includes(value) ? value : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function applyTheme(theme, persist = false) {
+  const nextTheme = theme === "light" ? "light" : "dark";
+  document.documentElement.dataset.theme = nextTheme;
+  document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+    const label = nextTheme === "dark" ? "Switch to light theme" : "Switch to dark theme";
+    button.setAttribute("aria-label", label);
+    button.setAttribute("aria-pressed", String(nextTheme === "light"));
+    button.setAttribute("title", label);
+  });
+  if (!persist) return;
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+  } catch (_) {
+    // The visual toggle still works when storage is unavailable.
+  }
+}
+
+function setupThemeToggle() {
+  const toggles = [...document.querySelectorAll("[data-theme-toggle]")];
+  if (!toggles.length) return;
+  applyTheme(document.documentElement.dataset.theme);
+  toggles.forEach((button) => {
+    button.addEventListener("click", () => {
+      applyTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light", true);
+    });
+  });
+  const systemTheme = window.matchMedia?.("(prefers-color-scheme: light)");
+  systemTheme?.addEventListener?.("change", (event) => {
+    if (!storedTheme()) applyTheme(event.matches ? "light" : "dark");
+  });
+}
+
 function browserTimeZone() {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -36,7 +79,7 @@ function formatUtcTimes() {
 
 function sortableRows(table) {
   const body = table.tBodies[0];
-  return body ? [...body.children].filter((row) => row.matches("tr[data-expandable-row]")) : [];
+  return body ? [...body.children].filter((row) => row.matches("tr[data-sortable-row]")) : [];
 }
 
 function sortableButtons(table) {
@@ -73,8 +116,6 @@ function sortTable(table, button) {
     .sort((a, b) => compareRows(a, b, key, type, direction))
     .forEach((row) => {
       body.appendChild(row);
-      const detailRow = attachedDetailRow(row);
-      if (detailRow) body.appendChild(detailRow);
     });
 }
 
@@ -116,42 +157,32 @@ function filterTable(table) {
       return (row.dataset[filter.dataset.filterKey] || "") === filter.value;
     });
     row.hidden = !(matchesSearch && matchesFilters);
-    const detailRow = attachedDetailRow(row);
-    if (detailRow) detailRow.hidden = row.hidden || !isExpandableRowOpen(row);
   });
 }
 
-function attachedDetailRow(row) {
-  return row.dataset.detailRow ? document.getElementById(row.dataset.detailRow) : null;
-}
-
-function isExpandableRowOpen(row) {
-  return row.querySelector("[data-fixture-toggle]")?.getAttribute("aria-expanded") === "true";
-}
-
-function setExpandableRow(row, expanded) {
-  const toggle = row.querySelector("[data-fixture-toggle]");
-  const detailRow = attachedDetailRow(row);
-  row.classList.toggle("is-expanded", expanded);
-  toggle?.setAttribute("aria-expanded", String(expanded));
-  if (detailRow) detailRow.hidden = !expanded || row.hidden;
-}
-
-function setupExpandableRows() {
-  document.querySelectorAll("[data-expandable-row]").forEach((row) => {
-    const toggle = row.querySelector("[data-fixture-toggle]");
-    toggle?.addEventListener("click", (event) => {
-      event.stopPropagation();
-      setExpandableRow(row, !isExpandableRowOpen(row));
-    });
-    row.addEventListener("click", (event) => {
-      if (!(event.target instanceof Element) || event.target.closest("a, button, input, select, textarea, label")) return;
-      setExpandableRow(row, !isExpandableRowOpen(row));
-    });
-    row.addEventListener("keydown", (event) => {
-      if (event.target !== row || !["Enter", " "].includes(event.key)) return;
-      event.preventDefault();
-      setExpandableRow(row, !isExpandableRowOpen(row));
+function setupPredictionFilters() {
+  document.querySelectorAll("[data-prediction-filters]").forEach((controls) => {
+    const table = document.getElementById(controls.dataset.tableId || "");
+    if (!table) return;
+    const buttons = [...controls.querySelectorAll("[data-prediction-filter]")];
+    const rows = [...table.querySelectorAll("tbody tr[data-prediction-outcome]")];
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const filter = button.dataset.predictionFilter || "all";
+        buttons.forEach((item) => {
+          const active = item === button;
+          item.classList.toggle("is-active", active);
+          item.setAttribute("aria-pressed", String(active));
+        });
+        rows.forEach((row) => {
+          const outcome = row.dataset.predictionOutcome || "other";
+          row.hidden = filter === "exact"
+            ? outcome !== "exact"
+            : filter === "correct"
+              ? !["exact", "correct"].includes(outcome)
+              : false;
+        });
+      });
     });
   });
 }
@@ -259,11 +290,12 @@ function setupLeaderboardSnake() {
   });
 }
 
+setupThemeToggle();
 setupBrowserTimezone();
 formatUtcTimes();
 setupTableTools();
 setupSortableTables();
 setupAutoSubmit();
-setupExpandableRows();
+setupPredictionFilters();
 setupApiTest();
 setupLeaderboardSnake();

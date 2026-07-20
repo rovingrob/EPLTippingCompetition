@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac
 import json
+import logging
 import os
 import re
 from collections import Counter
+from contextlib import asynccontextmanager, suppress
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncIterator
 from urllib.parse import quote
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -42,10 +45,12 @@ from .models import (
 from .runner import RunnerConfig, run_due_once
 from .scoring import leaderboard, leaderboard_snake, validate_prediction
 from .simulation import (
+    SimulationConfig,
     SimulationError,
     enqueue_simulation,
     latest_simulation,
     latest_simulation_run,
+    process_next_simulation,
 )
 from .storage import get_store
 
@@ -55,8 +60,7 @@ BASE_PATH = "/tipping"
 DEFAULT_COMPETITION_TIMEZONE = "Australia/Sydney"
 DEFAULT_LOCK_MINUTES = 30
 LEADERBOARD_PAGE_SIZE = 10
-
-app = FastAPI(title="EPL Tipping Competition")
+logger = logging.getLogger(__name__)
 
 
 def env_bool(name: str, default: bool = False) -> bool:
@@ -64,6 +68,56 @@ def env_bool(name: str, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def development_simulation_worker_enabled() -> bool:
+    return env_bool("TIPPING_DEV_SIMULATION_WORKER")
+
+
+def simulation_worker_poll_seconds() -> float:
+    try:
+        configured = float(os.getenv("TIPPING_SIMULATION_WORKER_POLL_SECONDS", "1"))
+    except ValueError:
+        configured = 1.0
+    return max(0.1, configured)
+
+
+async def simulation_worker_loop() -> None:
+    store = get_store()
+    poll_seconds = simulation_worker_poll_seconds()
+    config = SimulationConfig()
+    while True:
+        try:
+            result = await process_next_simulation(store, config)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Development simulation worker failed while polling the queue")
+            await asyncio.sleep(poll_seconds)
+            continue
+        if result is None:
+            await asyncio.sleep(poll_seconds)
+        else:
+            # Drain additional queued runs immediately while still yielding to requests.
+            await asyncio.sleep(0)
+
+
+@asynccontextmanager
+async def app_lifespan(_: FastAPI) -> AsyncIterator[None]:
+    worker_task: asyncio.Task[None] | None = None
+    if development_simulation_worker_enabled():
+        worker_task = asyncio.create_task(simulation_worker_loop(), name="development-simulation-worker")
+        logger.info("Development simulation worker enabled")
+    try:
+        yield
+    finally:
+        if worker_task is not None:
+            worker_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await worker_task
+
+
+app = FastAPI(title="EPL Tipping Competition", lifespan=app_lifespan)
 
 
 def allowed_hosts() -> list[str]:

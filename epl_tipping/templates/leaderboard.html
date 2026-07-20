@@ -3,7 +3,7 @@
 {% set title = "EPL Leaderboard" %}
 {% block body_class %}page-leaderboard{% endblock %}
 {% block content %}
-{{ page_header("Leaderboard", "Bot competition", "One point for the correct result; 1.5 points total for an exact score.") }}
+{{ page_header("Leaderboard", none, "One point for the correct result; 1.5 points total for an exact score.") }}
 
 <section class="panel leaderboard-snake" data-leaderboard-snake>
   <div class="snake-head">
@@ -72,6 +72,8 @@
   <tbody>
   {% for row in leaderboard_page %}
     {% set simulation = latest_simulations.get(row.contestant_id) %}
+    {% set simulation_run = latest_simulation_runs.get(row.contestant_id) %}
+    {% set simulation_pending = simulation_run and simulation_run.status in ['queued', 'running'] %}
     <tr class="leaderboard-row{% if leaderboard_pagination.offset == 0 and loop.first %} is-leader{% endif %}" data-contestant-id="{{ row.contestant_id }}" data-series-index="{{ (leaderboard_pagination.offset + loop.index0) % 5 }}">
       <td><span class="rank">{{ row.rank }}</span></td>
       <td><a href="{{ app_path('/leaderboard/' ~ row.contestant_id) }}"><strong>{{ row.name }}</strong></a></td>
@@ -84,7 +86,7 @@
           <a class="button small secondary" href="{{ app_path('/leaderboard/' ~ row.contestant_id ~ '/tips') }}">Tips</a>
           {% if is_admin %}<a class="button small secondary" href="{{ app_path('/leaderboard/' ~ row.contestant_id ~ '/api-test') }}">Test</a>{% endif %}
           <a class="button small secondary" href="{{ app_path('/leaderboard/' ~ row.contestant_id ~ '/simulation') }}">View</a>
-          <form action="{{ app_path('/simulations/run') }}" method="post"><input type="hidden" name="contestant_id" value="{{ row.contestant_id }}"><button class="small" type="submit">Simulate</button></form>
+          <form action="{{ app_path('/simulations/run') }}" method="post"><input type="hidden" name="contestant_id" value="{{ row.contestant_id }}"><button class="small{% if simulation_pending %} secondary{% endif %}" type="submit"{% if simulation_pending %} disabled aria-disabled="true"{% endif %}>{% if simulation_run and simulation_run.status == 'queued' %}Queued{% elif simulation_run and simulation_run.status == 'running' %}Running{% else %}Simulate{% endif %}</button></form>
         </div>
         {% if simulation %}<span class="simulation-summary">Predicted winner: <strong>{{ simulation.champion or "TBD" }}</strong></span>{% else %}<span class="simulation-summary muted">Not simulated yet</span>{% endif %}
       </td>

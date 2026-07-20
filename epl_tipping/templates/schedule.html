@@ -4,8 +4,8 @@
 {% set title = "EPL Schedule" %}
 {% block body_class %}page-schedule{% endblock %}
 {% block content %}
-{% call page_header("Premier League Schedule", season_label ~ " season", "Fixtures and results synchronised from football-data.org.") %}
-  <a class="button secondary" href="{{ app_path('/schedule.json') }}">Download JSON</a>
+{% call page_header("Premier League Schedule", none, "Fixtures, kickoff times, and results in one place.") %}
+  <a class="button secondary" href="{{ app_path('/schedule.json') }}">Download schedule.json</a>
 {% endcall %}
 
 <section class="metric-grid">

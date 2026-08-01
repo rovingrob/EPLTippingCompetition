@@ -56,7 +56,7 @@ from .storage import get_store
 
 
 PACKAGE_DIR = Path(__file__).resolve().parent
-BASE_PATH = "/tipping"
+BASE_PATH = ""
 DEFAULT_COMPETITION_TIMEZONE = "Australia/Sydney"
 DEFAULT_LOCK_MINUTES = 30
 LEADERBOARD_PAGE_SIZE = 10
@@ -571,11 +571,6 @@ def fixtures_for_date(
     return sorted(result, key=fixture_sort_key)
 
 
-@app.get("/")
-def root_redirect():
-    return RedirectResponse(app_path("/"), status_code=307)
-
-
 @app.get("/favicon.ico")
 def root_favicon():
     return FileResponse(PACKAGE_DIR / "static" / "favicon.svg", media_type="image/svg+xml")
@@ -775,7 +770,7 @@ def login(token: str = Form(...)):
         httponly=True,
         secure=admin_cookie_secure(),
         samesite="strict",
-        path=BASE_PATH,
+        path=BASE_PATH or "/",
     )
     return response
 
@@ -783,7 +778,7 @@ def login(token: str = Form(...)):
 @router.post("/admin/logout")
 def logout():
     response = redirect_to_admin("Signed out")
-    response.delete_cookie("admin_session", path=BASE_PATH)
+    response.delete_cookie("admin_session", path=BASE_PATH or "/")
     return response
 
 

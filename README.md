@@ -7,7 +7,7 @@ records the first valid prediction, imports fixtures and final scores from
 leaderboard.
 
 The application is a single-worker FastAPI/Jinja service with JSON persistence.
-Public pages live below `/tipping/`.
+Public pages live at the root.
 
 ## Screenshots
 
@@ -116,7 +116,7 @@ Start the app:
 uv run uvicorn epl_tipping.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open <http://127.0.0.1:8000/tipping/>. Run tests with:
+Open <http://127.0.0.1:8000/>. Run tests with:
 
 ```bash
 uv run pytest
@@ -208,4 +208,4 @@ Required production secrets are `FOOTBALL_DATA_TOKEN`, `ADMIN_TOKEN`, and a
 different `ADMIN_COOKIE_SECRET`. Never commit `.env` files or expose the source
 token to browsers, logs, templates, or contestant endpoints.
 
-The health endpoint is `GET /tipping/healthz`.
+The health endpoint is `GET /healthz`.

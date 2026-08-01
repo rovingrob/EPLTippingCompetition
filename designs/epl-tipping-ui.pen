@@ -25662,7 +25662,8 @@
                       "fill": "$text-muted",
                       "content": "22 Aug 2026 · 04:30",
                       "fontFamily": "$font",
-                      "fontSize": "$fs-small"
+                      "fontSize": "$fs-small",
+                      "fontWeight": "normal"
                     }
                   ]
                 }
@@ -25805,7 +25806,8 @@
                       "fill": "$text-muted",
                       "content": "Actual result: Arsenal 1–0 · 20.5 pts awarded",
                       "fontFamily": "$font-mono",
-                      "fontSize": "$fs-small"
+                      "fontSize": "$fs-small",
+                      "fontWeight": "normal"
                     }
                   ]
                 },
@@ -26126,7 +26128,8 @@
                       "fill": "$text-muted",
                       "content": "rows = home goals · columns = away goals",
                       "fontFamily": "$font",
-                      "fontSize": "$fs-label"
+                      "fontSize": "$fs-label",
+                      "fontWeight": "normal"
                     },
                     {
                       "type": "frame",
@@ -26907,7 +26910,8 @@
                               "fill": "$text-muted",
                               "content": "more predicted",
                               "fontFamily": "$font",
-                              "fontSize": "$fs-label"
+                              "fontSize": "$fs-label",
+                              "fontWeight": "normal"
                             }
                           ]
                         },
@@ -26936,7 +26940,8 @@
                               "fill": "$text-muted",
                               "content": "actual 1–0",
                               "fontFamily": "$font",
-                              "fontSize": "$fs-label"
+                              "fontSize": "$fs-label",
+                              "fontWeight": "normal"
                             }
                           ]
                         }
@@ -27017,7 +27022,8 @@
                           "width": "fill_container",
                           "content": "Called 1–0 for the exact score — the boldest right answer.",
                           "fontFamily": "$font",
-                          "fontSize": "$fs-small"
+                          "fontSize": "$fs-small",
+                          "fontWeight": "normal"
                         }
                       ]
                     },
@@ -27086,7 +27092,8 @@
                           "width": "fill_container",
                           "content": "Backed Coventry 2–4 at high confidence — wrong on the result.",
                           "fontFamily": "$font",
-                          "fontSize": "$fs-small"
+                          "fontSize": "$fs-small",
+                          "fontWeight": "normal"
                         }
                       ]
                     }

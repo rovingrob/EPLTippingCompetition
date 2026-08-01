@@ -103,7 +103,8 @@ tbody tr.is-snake-highlight { background: var(--green-soft); }
 .fixture-hero-team .team-badge { border-radius: var(--radius-sm); height: 44px; width: 44px; }
 .fixture-hero-score { align-items: center; display: flex; flex-direction: column; gap: 4px; text-align: center; }
 .fixture-hero-score strong { color: var(--ink); font: 800 40px/1.1 var(--font-mono); white-space: nowrap; }
-.fixture-hero-score span { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+.fixture-hero-footer { align-items: center; display: flex; flex-direction: column; gap: 6px; }
+.fixture-hero-status { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 2px; margin: 0; text-transform: uppercase; }
 .fixture-hero-kickoff { color: var(--muted); display: flex; font: 13px var(--font-mono); justify-content: center; }
 
 .fixture-kpi-grid { display: grid; gap: 16px; grid-template-columns: repeat(5, minmax(0, 1fr)); margin-bottom: 24px; }

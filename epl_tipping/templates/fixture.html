@@ -23,22 +23,20 @@
   <div class="fixture-hero-matchup">
     <div class="fixture-hero-team fixture-hero-home">{{ team_identity(fixture, "home", "end") }}</div>
     <div class="fixture-hero-score">
-      {% if is_completed_fixture(fixture) %}
-        <strong>{{ fixture.score_home }} – {{ fixture.score_away }}</strong>
-        <span>Full time</span>
-      {% elif fixture.status == "postponed" %}
-        <strong>P – P</strong>
-        <span>Postponed</span>
-      {% else %}
-        <strong>vs</strong>
-        <span>{{ fixture.status|replace('_', ' ') }}</span>
-      {% endif %}
+      {% if is_completed_fixture(fixture) %}<strong>{{ fixture.score_home }} – {{ fixture.score_away }}</strong>
+      {% elif fixture.status == "postponed" %}<strong>P – P</strong>
+      {% else %}<strong>vs</strong>{% endif %}
     </div>
     <div class="fixture-hero-team fixture-hero-away">{{ team_identity(fixture, "away", "start") }}</div>
   </div>
 
-  <div class="fixture-hero-kickoff">
-    <time data-utc="{{ fixture.kickoff_at or '' }}">{{ fixture.kickoff_at or "Kickoff TBC" }}</time>
+  <div class="fixture-hero-footer">
+    <p class="fixture-hero-status">
+      {% if is_completed_fixture(fixture) %}Full time{% elif fixture.status == "postponed" %}Postponed{% else %}{{ fixture.status|replace('_', ' ') }}{% endif %}
+    </p>
+    <div class="fixture-hero-kickoff">
+      <time data-utc="{{ fixture.kickoff_at or '' }}">{{ fixture.kickoff_at or "Kickoff TBC" }}</time>
+    </div>
   </div>
 </section>
 

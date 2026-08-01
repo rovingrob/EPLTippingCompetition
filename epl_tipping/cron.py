@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from .football_data import FootballDataConfig, sync_matches_once
-from .runner import RunnerConfig, run_due_once
+from .runner import RunnerConfig, reconcile_scores_once, run_due_once
 from .simulation import SimulationConfig, process_next_simulation
 from .storage import get_store
 
@@ -48,6 +48,13 @@ def main() -> None:
     sync_parser.add_argument("--dry-run", action="store_true")
     add_source_args(sync_parser)
 
+    reconcile_parser = subparsers.add_parser(
+        "reconcile",
+        help="Recompute scores from results and predictions, correcting any drift",
+    )
+    reconcile_parser.add_argument("--data-dir", type=Path)
+    reconcile_parser.add_argument("--dry-run", action="store_true")
+
     simulation_parser = subparsers.add_parser(
         "process-simulation",
         help="Process the next queued season simulation",
@@ -83,6 +90,8 @@ def main() -> None:
                 dry_run=args.dry_run,
             )
         )
+    elif args.command == "reconcile":
+        result = reconcile_scores_once(store, dry_run=args.dry_run)
     else:
         result = asyncio.run(
             process_next_simulation(

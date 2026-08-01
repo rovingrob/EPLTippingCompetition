@@ -147,6 +147,18 @@ tbody tr.is-snake-highlight { background: var(--green-soft); }
 .scoreline-legend { align-items: center; color: var(--muted); display: flex; flex-wrap: wrap; font-size: 11px; gap: 16px; margin-top: 12px; }
 .scoreline-legend span { align-items: center; display: inline-flex; gap: 8px; }
 .legend-swatch { background: var(--scoreline-4); border-radius: 50%; display: inline-block; height: 14px; width: 14px; }
+
+.fixture-callout-row { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 24px; }
+.fixture-callout { background: var(--panel); border: 1px solid var(--line); border-left-width: 4px; border-radius: var(--radius-lg); min-width: 0; padding: 24px; }
+.fixture-callout-correct { background: var(--green-soft); border-left-color: var(--green); }
+.fixture-callout-miss { background: var(--red-soft); border-left-color: var(--red); }
+.fixture-callout-label { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 1.5px; margin-bottom: 12px; text-transform: uppercase; }
+.fixture-callout-name { color: var(--ink); font-size: 18px; font-weight: 700; }
+.fixture-callout-confidence { font: 800 32px/1.1 var(--font-mono); margin-top: 4px; }
+.fixture-callout-correct .fixture-callout-confidence { color: var(--green); }
+.fixture-callout-miss .fixture-callout-confidence { color: var(--red); }
+.fixture-callout-scoreline { color: var(--text-secondary); font: 13px var(--font-mono); margin-top: 8px; }
+.fixture-callout-detail { color: var(--muted); font-size: 13px; margin-top: 4px; }
 .legend-swatch.actual { background: transparent; border: 2px solid var(--green); }
 
 .fixture-table-controls { align-items: center; display: flex; gap: 20px; justify-content: space-between; margin-bottom: 16px; }

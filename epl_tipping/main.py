@@ -42,8 +42,8 @@ from .models import (
     utc_now,
     winner_from_score,
 )
-from .runner import RunnerConfig, run_due_once
-from .scoring import leaderboard, leaderboard_snake, validate_prediction
+from .runner import RunnerConfig, reconcile_scores_once, run_due_once
+from .scoring import leaderboard, leaderboard_snake, reconcile_report, validate_prediction
 from .simulation import (
     SimulationConfig,
     SimulationError,
@@ -56,7 +56,7 @@ from .storage import get_store
 
 
 PACKAGE_DIR = Path(__file__).resolve().parent
-BASE_PATH = "/tipping"
+BASE_PATH = ""
 DEFAULT_COMPETITION_TIMEZONE = "Australia/Sydney"
 DEFAULT_LOCK_MINUTES = 30
 LEADERBOARD_PAGE_SIZE = 10
@@ -353,25 +353,6 @@ def fixture_prediction_insights(
         and row["prediction"] is not None
     ]
 
-    outcome_counts = {"home": 0, "draw": 0, "away": 0}
-    scoreline_counts: Counter[tuple[int, int]] = Counter()
-    confidence_values: list[float] = []
-    for row in visible_predictions:
-        prediction = row["prediction"]
-        home_score = int(prediction["predicted_score_home"])
-        away_score = int(prediction["predicted_score_away"])
-        scoreline_counts[(home_score, away_score)] += 1
-        if home_score > away_score:
-            outcome_counts["home"] += 1
-        elif away_score > home_score:
-            outcome_counts["away"] += 1
-        else:
-            outcome_counts["draw"] += 1
-        confidence = prediction.get("confidence")
-        if isinstance(confidence, (int, float)) and not isinstance(confidence, bool):
-            confidence_values.append(float(confidence))
-
-    valid_count = len(visible_predictions)
     home_name = display_team(fixture, "home")
     away_name = display_team(fixture, "away")
     outcome_labels = {
@@ -379,6 +360,50 @@ def fixture_prediction_insights(
         "draw": "Draw",
         "away": away_name,
     }
+
+    outcome_counts = {"home": 0, "draw": 0, "away": 0}
+    scoreline_counts: Counter[tuple[int, int]] = Counter()
+    confidence_values: list[float] = []
+    most_confident_correct = None
+    boldest_miss = None
+    best_correct_confidence = -1.0
+    best_miss_confidence = -1.0
+    for row in visible_predictions:
+        prediction = row["prediction"]
+        home_score = int(prediction["predicted_score_home"])
+        away_score = int(prediction["predicted_score_away"])
+        scoreline_counts[(home_score, away_score)] += 1
+        if home_score > away_score:
+            predicted_key = "home"
+        elif away_score > home_score:
+            predicted_key = "away"
+        else:
+            predicted_key = "draw"
+        outcome_counts[predicted_key] += 1
+        confidence = prediction.get("confidence")
+        if isinstance(confidence, (int, float)) and not isinstance(confidence, bool):
+            confidence = float(confidence)
+            confidence_values.append(confidence)
+            reason = (row.get("score") or {}).get("reason")
+            if reason in {"exact_score", "correct_result"} and confidence > best_correct_confidence:
+                best_correct_confidence = confidence
+                most_confident_correct = {
+                    "name": row["contestant"].get("name"),
+                    "scoreline": f"{home_score}–{away_score}",
+                    "confidence_percent": round(confidence * 100),
+                    "reason": reason,
+                }
+            elif reason == "incorrect_result" and confidence > best_miss_confidence:
+                best_miss_confidence = confidence
+                boldest_miss = {
+                    "name": row["contestant"].get("name"),
+                    "scoreline": f"{home_score}–{away_score}",
+                    "confidence_percent": round(confidence * 100),
+                    "reason": reason,
+                    "pick": outcome_labels[predicted_key],
+                }
+
+    valid_count = len(visible_predictions)
     outcome_order = ["home", "draw", "away"]
     consensus_key = max(outcome_order, key=lambda key: (outcome_counts[key], -outcome_order.index(key)))
     consensus_count = outcome_counts[consensus_key]
@@ -488,6 +513,8 @@ def fixture_prediction_insights(
         "outcomes": outcomes,
         "heatmap_labels": bucket_labels,
         "heatmap_rows": heatmap_rows,
+        "most_confident_correct": most_confident_correct,
+        "boldest_miss": boldest_miss,
     }
 
 
@@ -542,11 +569,6 @@ def fixtures_for_date(
         except ValueError:
             continue
     return sorted(result, key=fixture_sort_key)
-
-
-@app.get("/")
-def root_redirect():
-    return RedirectResponse(app_path("/"), status_code=307)
 
 
 @app.get("/favicon.ico")
@@ -707,7 +729,30 @@ def contestant_api_test_page(request: Request, contestant_id: str):
 
 @router.get("/admin")
 def admin_page(request: Request):
-    return templates.TemplateResponse(request, "admin.html", load_context(request))
+    context = load_context(request)
+    if context["is_admin"]:
+        context["reconciliation"] = reconcile_report(
+            context["scores"],
+            context["fixtures"],
+            context["registry"],
+            context["predictions"],
+        )
+    return templates.TemplateResponse(request, "admin.html", context)
+
+
+@router.post("/admin/reconcile")
+def admin_reconcile(
+    request: Request,
+    admin_session: str | None = Cookie(default=None),
+):
+    require_admin(request, admin_session)
+    result = reconcile_scores_once(get_store())
+    if result["aligned"]:
+        return redirect_to_admin("Scores already aligned; nothing to correct")
+    return redirect_to_admin(
+        f"Scores recomputed: {result['changed']} corrected, "
+        f"{result['missing']} added, {result['stale']} removed"
+    )
 
 
 @router.post("/admin/login")
@@ -725,7 +770,7 @@ def login(token: str = Form(...)):
         httponly=True,
         secure=admin_cookie_secure(),
         samesite="strict",
-        path=BASE_PATH,
+        path=BASE_PATH or "/",
     )
     return response
 
@@ -733,7 +778,7 @@ def login(token: str = Form(...)):
 @router.post("/admin/logout")
 def logout():
     response = redirect_to_admin("Signed out")
-    response.delete_cookie("admin_session", path=BASE_PATH)
+    response.delete_cookie("admin_session", path=BASE_PATH or "/")
     return response
 
 

@@ -19,7 +19,7 @@ from .models import (
     prediction_request_payload,
     utc_now,
 )
-from .scoring import score_completed_matches, validate_prediction
+from .scoring import recompute_scores, reconcile_report, validate_prediction
 from .storage import JsonStore, get_store
 
 
@@ -103,8 +103,8 @@ async def run_due_once(
         run_log = store.read("run_log.json")
 
         predictions, recorded_count = _merge_prediction_attempts(predictions, attempts)
-        score_count_before = len(scores)
-        scores = score_completed_matches(fixtures, registry, predictions, scores)
+        report = reconcile_report(scores, fixtures, registry, predictions)
+        scores = recompute_scores(fixtures, registry, predictions, previous_scores=scores, now=now)
         entry = {
             "id": str(uuid4()),
             "ran_at": isoformat_z(now),
@@ -114,7 +114,9 @@ async def run_due_once(
             "source_error": source_error,
             "jobs_attempted": len(jobs),
             "predictions_recorded": recorded_count,
-            "scores_added": len(scores) - score_count_before,
+            "scores_added": report["counts"]["missing"],
+            "scores_corrected": report["counts"]["changed"],
+            "scores_removed": report["counts"]["stale"],
             "scores_total": len(scores),
         }
         run_log.append(entry)
@@ -122,6 +124,52 @@ async def run_due_once(
         store.write("scores.json", scores)
         store.write("run_log.json", run_log[-200:])
     return entry
+
+
+def reconcile_scores_once(
+    store: JsonStore | None = None,
+    now: datetime | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Recompute scores authoritatively and (unless dry-run) persist corrections.
+
+    Returns the reconciliation counts. When aligned, or when ``dry_run`` is set,
+    nothing is written.
+    """
+    store = store or get_store()
+    now = (now or utc_now()).astimezone(UTC)
+    with store.locked():
+        fixtures = store.read("fixtures.json")
+        registry = store.read("registry.json")
+        predictions = store.read("predictions.json")
+        scores = store.read("scores.json")
+
+        report = reconcile_report(scores, fixtures, registry, predictions)
+        applied = not dry_run and not report["aligned"]
+        if applied:
+            new_scores = recompute_scores(fixtures, registry, predictions, previous_scores=scores, now=now)
+            run_log = store.read("run_log.json")
+            run_log.append(
+                {
+                    "id": str(uuid4()),
+                    "ran_at": isoformat_z(now),
+                    "kind": "reconcile",
+                    "jobs_attempted": 0,
+                    "scores_added": report["counts"]["missing"],
+                    "scores_corrected": report["counts"]["changed"],
+                    "scores_removed": report["counts"]["stale"],
+                    "scores_total": len(new_scores),
+                }
+            )
+            store.write("scores.json", new_scores)
+            store.write("run_log.json", run_log[-200:])
+    return {
+        "aligned": report["aligned"],
+        "dry_run": dry_run,
+        "applied": applied,
+        "total": report["total"],
+        **report["counts"],
+    }
 
 
 def _prediction_key(prediction: dict[str, Any]) -> tuple[str, str]:

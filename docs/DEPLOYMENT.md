@@ -52,7 +52,7 @@ Check status and health:
 sudo systemctl status epl-tipping.service
 sudo systemctl status epl-tipping-cron.timer
 sudo systemctl status epl-tipping-simulation.timer
-curl http://127.0.0.1:8000/tipping/healthz
+curl http://127.0.0.1:8000/healthz
 ```
 
 Read logs:
@@ -89,7 +89,7 @@ sudo systemctl restart epl-tipping.service
 ## Cloudflare Tunnel and admin protection
 
 Use `deploy/cloudflared-tunnel.example.yml` as the ingress shape and keep the
-host firewall closed to public port 8000. Protect `/tipping/admin*` with
+host firewall closed to public port 8000. Protect `/admin*` with
 Cloudflare Access in addition to the application's admin login.
 
 Recommended settings after HTTPS is working end to end:

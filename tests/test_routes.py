@@ -46,37 +46,33 @@ def prediction(match_id: str = "fd-1001") -> dict:
     }
 
 
-def test_root_pages_assets_and_security_headers_are_served_under_prefix(tmp_path, monkeypatch) -> None:
+def test_root_pages_assets_and_security_headers_are_served(tmp_path, monkeypatch) -> None:
     configure_app_store(tmp_path, monkeypatch)
     client = TestClient(app)
 
-    root = client.get("/", follow_redirects=False)
-    assert root.status_code == 307
-    assert root.headers["location"] == "/tipping/"
-
     for path in [
-        "/tipping/",
-        "/tipping/today",
-        "/tipping/leaderboard",
-        "/tipping/admin",
-        "/tipping/schedule.json",
-        "/tipping/api/fixtures",
-        "/tipping/api/leaderboard",
-        "/tipping/healthz",
-        "/tipping/static/styles.css",
-        "/tipping/static/theme-init.js",
-        "/tipping/favicon.ico",
+        "/",
+        "/today",
+        "/leaderboard",
+        "/admin",
+        "/schedule.json",
+        "/api/fixtures",
+        "/api/leaderboard",
+        "/healthz",
+        "/static/styles.css",
+        "/static/theme-init.js",
+        "/favicon.ico",
     ]:
         assert client.get(path).status_code == 200, path
 
-    page = client.get("/tipping/")
+    page = client.get("/")
     assert "Premier League Schedule" in page.text
     assert 'class="eyebrow"' not in page.text
     assert "Fixtures, kickoff times, and results in one place." in page.text
-    assert 'href="/tipping/schedule.json">Download schedule.json</a>' in page.text
-    assert 'href="/tipping/static/styles.css?v=' in page.text
-    assert 'src="/tipping/static/app.js?v=' in page.text
-    assert 'src="/tipping/static/theme-init.js?v=' in page.text
+    assert 'href="/schedule.json">Download schedule.json</a>' in page.text
+    assert 'href="/static/styles.css?v=' in page.text
+    assert 'src="/static/app.js?v=' in page.text
+    assert 'src="/static/theme-init.js?v=' in page.text
     assert page.text.index("theme-init.js") < page.text.index("styles.css")
     assert 'data-theme-toggle' in page.text
     assert 'aria-label="Switch to light theme"' in page.text
@@ -111,15 +107,15 @@ def test_schedule_health_and_leaderboard_apis_use_epl_store(tmp_path, monkeypatc
     store.write("source_state.json", {"last_successful_at": "2026-08-15T16:00:00Z"})
     client = TestClient(app)
 
-    schedule = client.get("/tipping/schedule.json")
+    schedule = client.get("/schedule.json")
     assert [row["match_id"] for row in schedule.json()] == ["fd-1", "fd-2"]
     assert schedule.headers["content-disposition"] == 'attachment; filename="epl-schedule.json"'
-    schedule_page = client.get("/tipping/")
+    schedule_page = client.get("/")
     assert 'data-filter-key="matchday"' in schedule_page.text
     assert '<option value="1">Matchday 1</option>' in schedule_page.text
     assert 'data-matchday="1"' in schedule_page.text
-    assert client.get("/tipping/api/fixtures").json() == schedule.json()
-    assert client.get("/tipping/api/leaderboard").json()[0] | {"rank": 1} == {
+    assert client.get("/api/fixtures").json() == schedule.json()
+    assert client.get("/api/leaderboard").json()[0] | {"rank": 1} == {
         "contestant_id": "alpha",
         "name": "Alpha Model",
         "status": "active",
@@ -128,7 +124,7 @@ def test_schedule_health_and_leaderboard_apis_use_epl_store(tmp_path, monkeypatc
         "exact_scores": 1,
         "rank": 1,
     }
-    assert client.get("/tipping/healthz").json() == {
+    assert client.get("/healthz").json() == {
         "status": "ok",
         "fixtures": 2,
         "completed": 1,
@@ -150,9 +146,9 @@ def test_public_pages_redact_pre_lock_predictions_but_admin_can_see_them(
     client = TestClient(app)
 
     public_detail_paths = [
-        "/tipping/fixtures/fd-1001",
-        "/tipping/leaderboard/alpha",
-        "/tipping/leaderboard/alpha/tips",
+        "/fixtures/fd-1001",
+        "/leaderboard/alpha",
+        "/leaderboard/alpha/tips",
     ]
     for path in public_detail_paths:
         response = client.get(path)
@@ -161,15 +157,15 @@ def test_public_pages_redact_pre_lock_predictions_but_admin_can_see_them(
         assert "37%" not in response.text
         assert "Hidden" in response.text
 
-    for path in ["/tipping/", "/tipping/today?date=2099-08-15"]:
+    for path in ["/", "/today?date=2099-08-15"]:
         response = client.get(path)
         assert response.status_code == 200
         assert "7–6" not in response.text
-        assert 'href="/tipping/fixtures/fd-1001"' in response.text
+        assert 'href="/fixtures/fd-1001"' in response.text
 
-    client.cookies.set("admin_session", encrypt_admin_cookie(), path="/tipping")
-    admin_fixture = client.get("/tipping/fixtures/fd-1001")
-    admin_tips = client.get("/tipping/leaderboard/alpha/tips")
+    client.cookies.set("admin_session", encrypt_admin_cookie(), path="/")
+    admin_fixture = client.get("/fixtures/fd-1001")
+    admin_tips = client.get("/leaderboard/alpha/tips")
     assert "7–6" in admin_fixture.text
     assert "7–6" in admin_tips.text
     assert "37%" in admin_tips.text
@@ -181,7 +177,7 @@ def test_predictions_are_public_at_or_after_lock(tmp_path, monkeypatch, make_fix
     store.write("registry.json", [endpoint()])
     store.write("predictions.json", [prediction()])
 
-    response = TestClient(app).get("/tipping/leaderboard/alpha/tips")
+    response = TestClient(app).get("/leaderboard/alpha/tips")
 
     assert response.status_code == 200
     assert "7–6" in response.text
@@ -215,11 +211,11 @@ def test_completed_future_dated_fixture_predictions_are_public_on_fixture_page(
     )
 
     client = TestClient(app)
-    schedule = client.get("/tipping/")
-    response = client.get("/tipping/fixtures/fd-1001")
+    schedule = client.get("/")
+    response = client.get("/fixtures/fd-1001")
 
     assert schedule.status_code == 200
-    assert 'href="/tipping/fixtures/fd-1001"' in schedule.text
+    assert 'href="/fixtures/fd-1001"' in schedule.text
     assert "7–6" not in schedule.text
     assert response.status_code == 200
     assert "7–6" in response.text
@@ -257,7 +253,7 @@ def test_today_links_to_separate_prediction_detail_screen(
     )
 
     client = TestClient(app)
-    response = client.get("/tipping/today?date=2099-08-15&tz=UTC")
+    response = client.get("/today?date=2099-08-15&tz=UTC")
 
     assert response.status_code == 200
     assert "1 fixtures" in response.text
@@ -271,10 +267,10 @@ def test_today_links_to_separate_prediction_detail_screen(
     assert 'class="fixture-details-link"' in response.text
     assert 'class="fixture-matchup-link"' not in response.text
     assert 'data-sort-key="winner"' not in response.text
-    assert 'href="/tipping/fixtures/fd-1001"' in response.text
+    assert 'href="/fixtures/fd-1001"' in response.text
     assert "7–6" not in response.text
 
-    detail = client.get("/tipping/fixtures/fd-1001")
+    detail = client.get("/fixtures/fd-1001")
     assert detail.status_code == 200
     assert "7–6" in detail.text
     assert "Confidence" in detail.text
@@ -329,7 +325,7 @@ def test_fixture_detail_renders_prediction_insights_heatmap_and_filters(
         ],
     )
 
-    response = TestClient(app).get("/tipping/fixtures/fd-1001")
+    response = TestClient(app).get("/fixtures/fd-1001")
 
     assert response.status_code == 200
     assert "3 of 3 submitted" in response.text
@@ -344,9 +340,167 @@ def test_fixture_detail_renders_prediction_insights_heatmap_and_filters(
     assert 'data-prediction-filter="exact"' in response.text
     assert 'data-prediction-outcome="exact"' in response.text
     assert 'data-prediction-outcome="correct"' in response.text
+    assert "Most confident correct" in response.text
+    assert "Boldest miss" in response.text
+    assert "Called 1–0 for the exact score" in response.text
+    assert "Backed Chelsea — wrong on the result" in response.text
+    assert "90%" in response.text
+    assert "30%" in response.text
+    table_html = response.text.split('id="fixture-prediction-table"', 1)[1]
+    assert table_html.index("Alpha Model") < table_html.index("Beta") < table_html.index("Gamma")
+
+
+def test_fixture_detail_callouts_pick_highest_confidence_and_ignore_missing_confidence(
+    tmp_path,
+    monkeypatch,
+    make_fixture,
+) -> None:
+    store = configure_app_store(tmp_path, monkeypatch)
+    store.write(
+        "fixtures.json",
+        [
+            make_fixture(
+                kickoff_at="2099-08-15T14:00:00Z",
+                status="completed",
+                source_status="FINISHED",
+                score_home=1,
+                score_away=0,
+            )
+        ],
+    )
+    store.write("registry.json", [endpoint("alpha"), endpoint("beta"), endpoint("gamma"), endpoint("delta")])
+
+    prediction_rows = []
+    for contestant_id, home_score, away_score, confidence in [
+        ("alpha", 1, 0, 0.4),
+        ("beta", 1, 0, None),
+        ("gamma", 0, 2, 0.2),
+        ("delta", 0, 3, 0.8),
+    ]:
+        row = prediction()
+        row["id"] = f"prediction-{contestant_id}"
+        row["contestant_id"] = contestant_id
+        row["prediction"] = {
+            "predicted_score_home": home_score,
+            "predicted_score_away": away_score,
+            "confidence": confidence,
+        }
+        row["raw_response"] = dict(row["prediction"])
+        prediction_rows.append(row)
+    store.write("predictions.json", prediction_rows)
+    store.write(
+        "scores.json",
+        [
+            {"contestant_id": "alpha", "match_id": "fd-1001", "points": 1.5, "reason": "exact_score"},
+            {"contestant_id": "beta", "match_id": "fd-1001", "points": 1.0, "reason": "correct_result"},
+            {"contestant_id": "gamma", "match_id": "fd-1001", "points": 0.0, "reason": "incorrect_result"},
+            {"contestant_id": "delta", "match_id": "fd-1001", "points": 0.0, "reason": "incorrect_result"},
+        ],
+    )
+
+    response = TestClient(app).get("/fixtures/fd-1001")
+
+    assert response.status_code == 200
+    callout_html = response.text.split('aria-label="Prediction callouts"', 1)[1].split("</section>", 1)[0]
+    # Beta has no confidence and is skipped even though it is also "correct"; Alpha wins on confidence.
+    assert "Called the result right" not in callout_html
+    assert "Called 1–0 for the exact score" in callout_html
+    assert "40%" in callout_html
+    # Delta has higher confidence than Gamma among the incorrect predictions.
+    assert "Backed Chelsea — wrong on the result" in callout_html
+    assert "80%" in callout_html
+    assert "20%" not in callout_html
+
+
+def test_fixture_detail_omits_callouts_when_no_qualifying_prediction(
+    tmp_path,
+    monkeypatch,
+    make_fixture,
+) -> None:
+    store = configure_app_store(tmp_path, monkeypatch)
+    store.write(
+        "fixtures.json",
+        [
+            make_fixture(
+                kickoff_at="2099-08-15T14:00:00Z",
+                status="completed",
+                source_status="FINISHED",
+                score_home=1,
+                score_away=0,
+            )
+        ],
+    )
+    store.write("registry.json", [endpoint("alpha")])
+    row = prediction()
+    row["prediction"] = {"predicted_score_home": 1, "predicted_score_away": 0, "confidence": None}
+    row["raw_response"] = dict(row["prediction"])
+    store.write("predictions.json", [row])
+    store.write(
+        "scores.json",
+        [{"contestant_id": "alpha", "match_id": "fd-1001", "points": 1.5, "reason": "exact_score"}],
+    )
+
+    response = TestClient(app).get("/fixtures/fd-1001")
+
+    assert response.status_code == 200
     assert "Most confident correct" not in response.text
     assert "Boldest miss" not in response.text
-    assert response.text.index("Alpha Model") < response.text.index("Beta") < response.text.index("Gamma")
+
+
+def test_fixture_detail_omits_callouts_when_predictions_are_hidden(
+    tmp_path,
+    monkeypatch,
+    make_fixture,
+) -> None:
+    store = configure_app_store(tmp_path, monkeypatch)
+    store.write("fixtures.json", [make_fixture(kickoff_at="2099-08-15T14:00:00Z")])
+    store.write("registry.json", [endpoint()])
+    store.write("predictions.json", [prediction()])
+    store.write(
+        "scores.json",
+        [{"contestant_id": "alpha", "match_id": "fd-1001", "points": 1.5, "reason": "exact_score"}],
+    )
+
+    response = TestClient(app).get("/fixtures/fd-1001")
+
+    assert response.status_code == 200
+    assert "Most confident correct" not in response.text
+    assert "Boldest miss" not in response.text
+
+
+def test_fixture_detail_boldest_miss_draw_pick_reads_naturally(
+    tmp_path,
+    monkeypatch,
+    make_fixture,
+) -> None:
+    store = configure_app_store(tmp_path, monkeypatch)
+    store.write(
+        "fixtures.json",
+        [
+            make_fixture(
+                kickoff_at="2099-08-15T14:00:00Z",
+                status="completed",
+                source_status="FINISHED",
+                score_home=1,
+                score_away=0,
+            )
+        ],
+    )
+    store.write("registry.json", [endpoint("alpha")])
+    row = prediction()
+    row["prediction"] = {"predicted_score_home": 1, "predicted_score_away": 1, "confidence": 0.5}
+    row["raw_response"] = dict(row["prediction"])
+    store.write("predictions.json", [row])
+    store.write(
+        "scores.json",
+        [{"contestant_id": "alpha", "match_id": "fd-1001", "points": 0.0, "reason": "incorrect_result"}],
+    )
+
+    response = TestClient(app).get("/fixtures/fd-1001")
+
+    assert response.status_code == 200
+    assert "Predicted a draw — wrong on the result" in response.text
+    assert "Backed Draw" not in response.text
 
 
 def test_today_uses_requested_user_timezone_for_fixture_date(
@@ -358,21 +512,21 @@ def test_today_uses_requested_user_timezone_for_fixture_date(
     store.write("fixtures.json", [make_fixture(kickoff_at="2026-08-15T23:30:00Z")])
     client = TestClient(app)
 
-    sydney = client.get("/tipping/today?date=2026-08-16&tz=Australia/Sydney")
-    new_york = client.get("/tipping/today?date=2026-08-16&tz=America/New_York")
-    invalid = client.get("/tipping/today?date=2026-08-15&tz=not-a-timezone")
+    sydney = client.get("/today?date=2026-08-16&tz=Australia/Sydney")
+    new_york = client.get("/today?date=2026-08-16&tz=America/New_York")
+    invalid = client.get("/today?date=2026-08-15&tz=not-a-timezone")
 
     assert 'data-today-timezone="Australia/Sydney"' in sydney.text
-    assert 'href="/tipping/fixtures/fd-1001"' in sydney.text
+    assert 'href="/fixtures/fd-1001"' in sydney.text
     assert 'data-today-timezone="America/New_York"' in new_york.text
-    assert 'href="/tipping/fixtures/fd-1001"' not in new_york.text
+    assert 'href="/fixtures/fd-1001"' not in new_york.text
     assert 'data-today-timezone="UTC"' in invalid.text
 
 
 def test_browser_script_uses_local_timezone_and_passes_it_to_today(tmp_path, monkeypatch) -> None:
     configure_app_store(tmp_path, monkeypatch)
 
-    script = TestClient(app).get("/tipping/static/app.js").text
+    script = TestClient(app).get("/static/app.js").text
 
     assert "resolvedOptions().timeZone" in script
     assert 'url.searchParams.set("tz", timeZone)' in script
@@ -388,7 +542,7 @@ def test_leaderboard_renders_interactive_snake(tmp_path, monkeypatch, make_fixtu
         [{"contestant_id": "alpha", "match_id": "fd-1001", "points": 1.5, "reason": "exact_score"}],
     )
 
-    response = TestClient(app).get("/tipping/leaderboard")
+    response = TestClient(app).get("/leaderboard")
 
     assert response.status_code == 200
     assert "Bot competition" not in response.text
@@ -403,24 +557,24 @@ def test_leaderboard_paginates_ten_contestants_and_preserves_overall_position(tm
     store.write("registry.json", [endpoint(f"bot-{index:02d}") for index in range(23)])
     client = TestClient(app)
 
-    first = client.get("/tipping/leaderboard")
+    first = client.get("/leaderboard")
     assert first.status_code == 200
     assert first.text.count('class="leaderboard-row') == 10
     assert first.text.count("is-leader") == 1
     assert "Showing 1–10 of 23 contestants" in first.text
-    assert 'href="/tipping/leaderboard?page=2"' in first.text
-    assert 'href="/tipping/leaderboard/bot-00"' in first.text
-    assert 'href="/tipping/leaderboard/bot-10"' not in first.text
+    assert 'href="/leaderboard?page=2"' in first.text
+    assert 'href="/leaderboard/bot-00"' in first.text
+    assert 'href="/leaderboard/bot-10"' not in first.text
 
-    second = client.get("/tipping/leaderboard?page=2")
+    second = client.get("/leaderboard?page=2")
     assert second.status_code == 200
     assert second.text.count('class="leaderboard-row') == 10
     assert "is-leader" not in second.text
     assert "Showing 11–20 of 23 contestants" in second.text
-    assert 'href="/tipping/leaderboard/bot-10"' in second.text
+    assert 'href="/leaderboard/bot-10"' in second.text
     assert 'data-series-index="0"' in second.text
 
-    last = client.get("/tipping/leaderboard?page=999")
+    last = client.get("/leaderboard?page=999")
     assert last.status_code == 200
     assert last.text.count('class="leaderboard-row') == 3
     assert "Showing 21–23 of 23 contestants" in last.text
@@ -434,12 +588,12 @@ def test_contestant_routes_and_api_test_render_fixture_only_payload(tmp_path, mo
     store.write("registry.json", [endpoint()])
     client = TestClient(app)
 
-    assert client.get("/tipping/leaderboard/missing").status_code == 404
-    assert client.get("/tipping/leaderboard/missing/tips").status_code == 404
-    assert client.get("/tipping/leaderboard/missing/simulation").status_code == 404
-    assert client.get("/tipping/leaderboard/alpha/api-test").status_code == 401
-    client.cookies.set("admin_session", encrypt_admin_cookie(), path="/tipping")
-    api_test = client.get("/tipping/leaderboard/alpha/api-test")
+    assert client.get("/leaderboard/missing").status_code == 404
+    assert client.get("/leaderboard/missing/tips").status_code == 404
+    assert client.get("/leaderboard/missing/simulation").status_code == 404
+    assert client.get("/leaderboard/alpha/api-test").status_code == 401
+    client.cookies.set("admin_session", encrypt_admin_cookie(), path="/")
+    api_test = client.get("/leaderboard/alpha/api-test")
 
     assert api_test.status_code == 200
     assert "fixture-only payload" in api_test.text
@@ -456,13 +610,13 @@ def test_admin_login_uses_secure_cookie_and_protected_routes_require_it(tmp_path
     configure_app_store(tmp_path, monkeypatch)
     client = TestClient(app)
 
-    assert client.post("/tipping/admin/run-due").status_code == 401
-    bad = client.post("/tipping/admin/login", data={"token": "wrong"}, follow_redirects=False)
+    assert client.post("/admin/run-due").status_code == 401
+    bad = client.post("/admin/login", data={"token": "wrong"}, follow_redirects=False)
     assert bad.status_code == 303
     assert "Invalid%20token" in bad.headers["location"]
 
     login = client.post(
-        "/tipping/admin/login",
+        "/admin/login",
         data={"token": "route-test-token"},
         follow_redirects=False,
     )
@@ -471,9 +625,9 @@ def test_admin_login_uses_secure_cookie_and_protected_routes_require_it(tmp_path
     assert "admin_session=" in cookie
     assert "HttpOnly" in cookie
     assert "SameSite=strict" in cookie
-    assert "Path=/tipping" in cookie
+    assert "Path=/" in cookie
     assert "route-test-token" not in cookie
-    assert "Sign out" in client.get("/tipping/admin").text
+    assert "Sign out" in client.get("/admin").text
 
 
 def test_admin_login_is_disabled_when_secrets_are_missing_or_identical(tmp_path, monkeypatch) -> None:
@@ -482,7 +636,7 @@ def test_admin_login_is_disabled_when_secrets_are_missing_or_identical(tmp_path,
     monkeypatch.delenv("ADMIN_COOKIE_SECRET", raising=False)
     client = TestClient(app)
 
-    missing = client.post("/tipping/admin/login", data={"token": "admin"}, follow_redirects=False)
+    missing = client.post("/admin/login", data={"token": "admin"}, follow_redirects=False)
     assert missing.status_code == 303
     assert "not%20configured" in missing.headers["location"]
     assert "admin_session=" not in missing.headers.get("set-cookie", "")
@@ -490,7 +644,7 @@ def test_admin_login_is_disabled_when_secrets_are_missing_or_identical(tmp_path,
     monkeypatch.setenv("ADMIN_TOKEN", "same-secret")
     monkeypatch.setenv("ADMIN_COOKIE_SECRET", "same-secret")
     identical = client.post(
-        "/tipping/admin/login",
+        "/admin/login",
         data={"token": "same-secret"},
         follow_redirects=False,
     )
@@ -511,10 +665,10 @@ def test_admin_manual_result_override_invalidates_score_and_can_be_cleared(
         [{"contestant_id": "alpha", "match_id": "fd-1001", "points": 1.5, "reason": "exact_score"}],
     )
     client = TestClient(app)
-    client.cookies.set("admin_session", encrypt_admin_cookie(), path="/tipping")
+    client.cookies.set("admin_session", encrypt_admin_cookie(), path="/")
 
     saved = client.post(
-        "/tipping/admin/results",
+        "/admin/results",
         data={"match_id": "fd-1001", "score_home": 3, "score_away": 1},
         follow_redirects=False,
     )
@@ -529,7 +683,7 @@ def test_admin_manual_result_override_invalidates_score_and_can_be_cleared(
     assert store.read("scores.json") == []
 
     cleared = client.post(
-        "/tipping/admin/results/clear",
+        "/admin/results/clear",
         data={"match_id": "fd-1001"},
         follow_redirects=False,
     )
@@ -563,13 +717,13 @@ def test_admin_can_reopen_one_or_all_predictions_for_a_fixture(tmp_path, monkeyp
     )
     client = TestClient(app)
     assert client.post(
-        "/tipping/admin/predictions/reopen",
+        "/admin/predictions/reopen",
         data={"match_id": "fd-1001", "contestant_id": "alpha"},
     ).status_code == 401
-    client.cookies.set("admin_session", encrypt_admin_cookie(), path="/tipping")
+    client.cookies.set("admin_session", encrypt_admin_cookie(), path="/")
 
     one = client.post(
-        "/tipping/admin/predictions/reopen",
+        "/admin/predictions/reopen",
         data={"match_id": "fd-1001", "contestant_id": "alpha"},
         follow_redirects=False,
     )
@@ -584,7 +738,7 @@ def test_admin_can_reopen_one_or_all_predictions_for_a_fixture(tmp_path, monkeyp
     }
 
     all_contestants = client.post(
-        "/tipping/admin/predictions/reopen",
+        "/admin/predictions/reopen",
         data={"match_id": "fd-1001", "contestant_id": ""},
         follow_redirects=False,
     )
@@ -606,13 +760,13 @@ def test_simulation_request_route_queues_public_run(tmp_path, monkeypatch, make_
     store.write("registry.json", [endpoint()])
 
     response = TestClient(app).post(
-        "/tipping/simulations/run",
+        "/simulations/run",
         data={"contestant_id": "alpha"},
         follow_redirects=False,
     )
 
     assert response.status_code == 303
-    assert response.headers["location"].startswith("/tipping/leaderboard/alpha/simulation?message=")
+    assert response.headers["location"].startswith("/leaderboard/alpha/simulation?message=")
     run = store.read("simulation_runs.json")[0]
     assert run["contestant_id"] == "alpha"
     assert run["requested_by"] == "public"
@@ -639,13 +793,13 @@ def test_leaderboard_shows_latest_simulated_winner_and_simulate_action(
         ],
     )
 
-    response = TestClient(app).get("/tipping/leaderboard")
+    response = TestClient(app).get("/leaderboard")
 
     assert response.status_code == 200
     assert "Predicted winner:" in response.text
     assert "Arsenal" in response.text
-    assert 'href="/tipping/leaderboard/alpha/simulation"' in response.text
-    assert 'action="/tipping/simulations/run"' in response.text
+    assert 'href="/leaderboard/alpha/simulation"' in response.text
+    assert 'action="/simulations/run"' in response.text
     assert "Simulate" in response.text
 
 
@@ -672,10 +826,50 @@ def test_simulation_actions_are_disabled_while_run_is_pending(
         ],
     )
 
-    leaderboard_response = TestClient(app).get("/tipping/leaderboard")
-    simulation_response = TestClient(app).get("/tipping/leaderboard/alpha/simulation")
+    leaderboard_response = TestClient(app).get("/leaderboard")
+    simulation_response = TestClient(app).get("/leaderboard/alpha/simulation")
 
     assert leaderboard_response.status_code == 200
     assert 'disabled aria-disabled="true">Queued</button>' in leaderboard_response.text
     assert simulation_response.status_code == 200
     assert 'disabled aria-disabled="true">Simulation queued</button>' in simulation_response.text
+
+
+def test_admin_reconcile_reports_and_fixes_drift(tmp_path, monkeypatch, make_fixture) -> None:
+    store = configure_app_store(tmp_path, monkeypatch)
+    store.write("fixtures.json", [make_fixture(source_match_id=1, status="completed", score_home=1, score_away=0)])
+    store.write("registry.json", [endpoint("alpha")])
+    store.write(
+        "predictions.json",
+        [
+            {
+                "id": "p1",
+                "contestant_id": "alpha",
+                "match_id": "fd-1",
+                "valid": True,
+                "prediction": {"predicted_score_home": 1, "predicted_score_away": 0},
+            }
+        ],
+    )
+    # Drifted stored score: says 0.0 incorrect, but 1-0 vs a 1-0 prediction is an exact score.
+    store.write(
+        "scores.json",
+        [{"contestant_id": "alpha", "match_id": "fd-1", "points": 0.0, "reason": "incorrect_result", "scored_at": "2026-08-01T00:00:00Z"}],
+    )
+
+    client = TestClient(app)
+    client.cookies.set("admin_session", encrypt_admin_cookie(), path="/")
+
+    page = client.get("/admin")
+    assert page.status_code == 200
+    assert "Reconciliation" in page.text
+    assert "changed" in page.text  # the drift is surfaced
+
+    applied = client.post("/admin/reconcile", follow_redirects=False)
+    assert applied.status_code in (302, 303, 307)
+
+    row = next(s for s in store.read("scores.json") if s["contestant_id"] == "alpha")
+    assert (row["points"], row["reason"]) == (1.5, "exact_score")
+
+    # A second GET now reports aligned.
+    assert "All 1 scores match" in client.get("/admin").text

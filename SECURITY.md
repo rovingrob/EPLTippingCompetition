@@ -30,7 +30,7 @@ Production deployments must set:
 - `FOOTBALL_DATA_TOKEN`: the server-only football-data.org API token
 
 The FastAPI app should bind only to `127.0.0.1`. Put Cloudflare Tunnel in front
-of it, and protect `/tipping/admin*` with Cloudflare Access.
+of it, and protect `/admin*` with Cloudflare Access.
 
 ## Known Risk Areas
 

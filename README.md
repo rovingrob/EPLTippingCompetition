@@ -7,7 +7,7 @@ records the first valid prediction, imports fixtures and final scores from
 leaderboard.
 
 The application is a single-worker FastAPI/Jinja service with JSON persistence.
-Public pages live below `/tipping/`.
+Public pages live at the root.
 
 ## Screenshots
 
@@ -116,7 +116,7 @@ Start the app:
 uv run uvicorn epl_tipping.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open <http://127.0.0.1:8000/tipping/>. Run tests with:
+Open <http://127.0.0.1:8000/>. Run tests with:
 
 ```bash
 uv run pytest
@@ -151,6 +151,19 @@ If the provider is temporarily unavailable, `run-due` records the source error
 and continues with cached fixtures. Use `--no-sync-source` to skip the source
 request intentionally.
 
+`run-due` already recomputes every score on each run, so drift self-heals
+automatically. Run reconciliation on demand as a safety net, or to preview
+what would change:
+
+```bash
+uv run python -m epl_tipping.cron reconcile
+uv run python -m epl_tipping.cron reconcile --dry-run
+```
+
+`reconcile` recomputes every score from the current results and predictions,
+correcting any changed, missing, or stale entries. `--dry-run` reports what
+would change without writing.
+
 Public full-season simulation requests are durably queued. A worker combines
 authoritative completed results with a contestant's predictions for every
 remaining fixture, then calculates the simulated table. Process one queued run:
@@ -160,7 +173,8 @@ uv run python -m epl_tipping.cron process-simulation
 ```
 
 The deployment timer runs the due workflow every four hours (six source syncs
-per day) and polls the simulation queue every minute. Simulation calls use five
+per day), polls the simulation queue every minute, and runs reconciliation
+once daily as an additional safety net. Simulation calls use five
 concurrent requests, one retry, and a deterministic fallback after failure.
 Public users may request one simulation per contestant per Sydney calendar day;
 admins are exempt from that limit.
@@ -194,4 +208,4 @@ Required production secrets are `FOOTBALL_DATA_TOKEN`, `ADMIN_TOKEN`, and a
 different `ADMIN_COOKIE_SECRET`. Never commit `.env` files or expose the source
 token to browsers, logs, templates, or contestant endpoints.
 
-The health endpoint is `GET /tipping/healthz`.
+The health endpoint is `GET /healthz`.

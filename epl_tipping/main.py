@@ -1000,7 +1000,7 @@ def request_simulation(request: Request, contestant_id: str = Form(...)):
     except SimulationError as exc:
         message = str(exc)
     return RedirectResponse(
-        f"{app_path('/leaderboard/' + contestant_id + '/simulation')}?message={quote(message)}",
+        f"{app_path('/leaderboard/' + quote(contestant_id, safe='') + '/simulation')}?message={quote(message)}",
         status_code=303,
     )
 

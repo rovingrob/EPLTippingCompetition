@@ -17,7 +17,7 @@
         <a {% if is_active_path(request, '/') %}class="active"{% endif %} href="{{ app_path('/') }}">Schedule</a>
         <a {% if is_active_path(request, '/today') %}class="active"{% endif %} href="{{ app_path('/today') }}">Today</a>
         <a {% if is_active_path(request, '/leaderboard') or request.url.path.startswith(app_path('/leaderboard/')) %}class="active"{% endif %} href="{{ app_path('/leaderboard') }}">Leaderboard</a>
-        <a {% if is_active_path(request, '/admin') %}class="active"{% endif %} href="{{ app_path('/admin') }}">Admin</a>
+        {% if is_admin %}<a {% if is_active_path(request, '/admin') %}class="active"{% endif %} href="{{ app_path('/admin') }}">Admin</a>{% endif %}
       </nav>
       <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to light theme" aria-pressed="false" title="Switch to light theme">
         <span class="theme-toggle-icon theme-toggle-sun" aria-hidden="true">☀</span>

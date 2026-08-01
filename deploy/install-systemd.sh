@@ -233,13 +233,51 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
+write_root_file 644 "/etc/systemd/system/$SERVICE_NAME-reconcile.service" <<EOF
+[Unit]
+Description=EPL Tipping score reconciliation
+
+[Service]
+Type=oneshot
+User=$SERVICE_USER
+Group=$SERVICE_GROUP
+WorkingDirectory=$APP_DIR
+EnvironmentFile=$ENV_FILE
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=$PYTHON_BIN -m epl_tipping.cron reconcile --data-dir $DATA_DIR
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=$DATA_DIR
+CapabilityBoundingSet=
+AmbientCapabilities=
+LockPersonality=true
+RestrictSUIDSGID=true
+EOF
+
+write_root_file 644 "/etc/systemd/system/$SERVICE_NAME-reconcile.timer" <<EOF
+[Unit]
+Description=Reconcile EPL Tipping scores daily
+
+[Timer]
+OnCalendar=daily
+AccuracySec=1min
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
 run_root systemctl daemon-reload
 
 if [ "$START_NOW" = "1" ]; then
-  run_root systemctl enable --now "$SERVICE_NAME.service" "$SERVICE_NAME-cron.timer" "$SERVICE_NAME-simulation.timer"
-  echo "Started $SERVICE_NAME.service, $SERVICE_NAME-cron.timer, and $SERVICE_NAME-simulation.timer."
+  run_root systemctl enable --now "$SERVICE_NAME.service" "$SERVICE_NAME-cron.timer" "$SERVICE_NAME-simulation.timer" "$SERVICE_NAME-reconcile.timer"
+  echo "Started $SERVICE_NAME.service, $SERVICE_NAME-cron.timer, $SERVICE_NAME-simulation.timer, and $SERVICE_NAME-reconcile.timer."
 else
   echo "Installed systemd units without starting them."
   echo "Start later with:"
-  echo "  sudo systemctl enable --now $SERVICE_NAME.service $SERVICE_NAME-cron.timer $SERVICE_NAME-simulation.timer"
+  echo "  sudo systemctl enable --now $SERVICE_NAME.service $SERVICE_NAME-cron.timer $SERVICE_NAME-simulation.timer $SERVICE_NAME-reconcile.timer"
 fi

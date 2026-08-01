@@ -97,6 +97,35 @@
   </article>
 </section>
 {% endif %}
+
+{% if fixture_insights.most_confident_correct or fixture_insights.boldest_miss %}
+<section class="fixture-callout-row" aria-label="Prediction callouts">
+  {% if fixture_insights.most_confident_correct %}
+  {% set callout = fixture_insights.most_confident_correct %}
+  <article class="fixture-callout fixture-callout-correct">
+    <p class="fixture-callout-label">Most confident correct</p>
+    <p class="fixture-callout-name">{{ callout.name }}</p>
+    <p class="fixture-callout-confidence">{{ callout.confidence_percent }}%</p>
+    <p class="fixture-callout-scoreline">Predicted {{ callout.scoreline }}</p>
+    <p class="fixture-callout-detail">
+      {% if callout.reason == "exact_score" %}Called {{ callout.scoreline }} for the exact score{% else %}Called the result right{% endif %}
+    </p>
+  </article>
+  {% endif %}
+  {% if fixture_insights.boldest_miss %}
+  {% set callout = fixture_insights.boldest_miss %}
+  <article class="fixture-callout fixture-callout-miss">
+    <p class="fixture-callout-label">Boldest miss</p>
+    <p class="fixture-callout-name">{{ callout.name }}</p>
+    <p class="fixture-callout-confidence">{{ callout.confidence_percent }}%</p>
+    <p class="fixture-callout-scoreline">Predicted {{ callout.scoreline }}</p>
+    <p class="fixture-callout-detail">
+      {% if callout.pick == "Draw" %}Predicted a draw — wrong on the result{% else %}Backed {{ callout.pick }} — wrong on the result{% endif %}
+    </p>
+  </article>
+  {% endif %}
+</section>
+{% endif %}
 {% endif %}
 
 <section class="fixture-prediction-section">

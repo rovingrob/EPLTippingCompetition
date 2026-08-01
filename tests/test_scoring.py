@@ -5,7 +5,7 @@ import pytest
 from epl_tipping.scoring import (
     leaderboard,
     leaderboard_snake,
-    score_completed_matches,
+    recompute_scores,
     score_prediction,
     validate_prediction,
 )
@@ -81,7 +81,7 @@ def test_missing_invalid_and_unfinished_predictions_score_zero(make_fixture) -> 
     assert score_prediction(fixture, prediction(2, 1), valid=False) == (0.0, "invalid_or_missing")
 
 
-def test_score_completed_matches_covers_missing_invalid_and_inactive_predictors(make_fixture) -> None:
+def test_recompute_scores_covers_missing_invalid_and_inactive_predictors(make_fixture) -> None:
     fixtures = [make_fixture(status="completed", score_home=2, score_away=1)]
     registry = [
         {"id": "alpha", "name": "Alpha", "status": "active"},
@@ -104,7 +104,7 @@ def test_score_completed_matches_covers_missing_invalid_and_inactive_predictors(
         },
     ]
 
-    scores = score_completed_matches(fixtures, registry, predictions, [])
+    scores = recompute_scores(fixtures, registry, predictions)
     by_contestant = {row["contestant_id"]: row for row in scores}
 
     assert set(by_contestant) == {"alpha", "bravo", "retired"}
@@ -114,7 +114,8 @@ def test_score_completed_matches_covers_missing_invalid_and_inactive_predictors(
         0.0,
         "invalid_or_missing",
     )
-    assert score_completed_matches(fixtures, registry, predictions, scores) == scores
+    # Recomputing with the prior scores as input is idempotent (points, reason, scored_at preserved).
+    assert recompute_scores(fixtures, registry, predictions, previous_scores=scores) == scores
 
 
 def test_leaderboard_aggregates_orders_and_assigns_competition_ranks() -> None:

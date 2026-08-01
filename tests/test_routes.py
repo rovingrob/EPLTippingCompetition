@@ -344,9 +344,167 @@ def test_fixture_detail_renders_prediction_insights_heatmap_and_filters(
     assert 'data-prediction-filter="exact"' in response.text
     assert 'data-prediction-outcome="exact"' in response.text
     assert 'data-prediction-outcome="correct"' in response.text
+    assert "Most confident correct" in response.text
+    assert "Boldest miss" in response.text
+    assert "Called 1–0 for the exact score" in response.text
+    assert "Backed Chelsea — wrong on the result" in response.text
+    assert "90%" in response.text
+    assert "30%" in response.text
+    table_html = response.text.split('id="fixture-prediction-table"', 1)[1]
+    assert table_html.index("Alpha Model") < table_html.index("Beta") < table_html.index("Gamma")
+
+
+def test_fixture_detail_callouts_pick_highest_confidence_and_ignore_missing_confidence(
+    tmp_path,
+    monkeypatch,
+    make_fixture,
+) -> None:
+    store = configure_app_store(tmp_path, monkeypatch)
+    store.write(
+        "fixtures.json",
+        [
+            make_fixture(
+                kickoff_at="2099-08-15T14:00:00Z",
+                status="completed",
+                source_status="FINISHED",
+                score_home=1,
+                score_away=0,
+            )
+        ],
+    )
+    store.write("registry.json", [endpoint("alpha"), endpoint("beta"), endpoint("gamma"), endpoint("delta")])
+
+    prediction_rows = []
+    for contestant_id, home_score, away_score, confidence in [
+        ("alpha", 1, 0, 0.4),
+        ("beta", 1, 0, None),
+        ("gamma", 0, 2, 0.2),
+        ("delta", 0, 3, 0.8),
+    ]:
+        row = prediction()
+        row["id"] = f"prediction-{contestant_id}"
+        row["contestant_id"] = contestant_id
+        row["prediction"] = {
+            "predicted_score_home": home_score,
+            "predicted_score_away": away_score,
+            "confidence": confidence,
+        }
+        row["raw_response"] = dict(row["prediction"])
+        prediction_rows.append(row)
+    store.write("predictions.json", prediction_rows)
+    store.write(
+        "scores.json",
+        [
+            {"contestant_id": "alpha", "match_id": "fd-1001", "points": 1.5, "reason": "exact_score"},
+            {"contestant_id": "beta", "match_id": "fd-1001", "points": 1.0, "reason": "correct_result"},
+            {"contestant_id": "gamma", "match_id": "fd-1001", "points": 0.0, "reason": "incorrect_result"},
+            {"contestant_id": "delta", "match_id": "fd-1001", "points": 0.0, "reason": "incorrect_result"},
+        ],
+    )
+
+    response = TestClient(app).get("/tipping/fixtures/fd-1001")
+
+    assert response.status_code == 200
+    callout_html = response.text.split('aria-label="Prediction callouts"', 1)[1].split("</section>", 1)[0]
+    # Beta has no confidence and is skipped even though it is also "correct"; Alpha wins on confidence.
+    assert "Called the result right" not in callout_html
+    assert "Called 1–0 for the exact score" in callout_html
+    assert "40%" in callout_html
+    # Delta has higher confidence than Gamma among the incorrect predictions.
+    assert "Backed Chelsea — wrong on the result" in callout_html
+    assert "80%" in callout_html
+    assert "20%" not in callout_html
+
+
+def test_fixture_detail_omits_callouts_when_no_qualifying_prediction(
+    tmp_path,
+    monkeypatch,
+    make_fixture,
+) -> None:
+    store = configure_app_store(tmp_path, monkeypatch)
+    store.write(
+        "fixtures.json",
+        [
+            make_fixture(
+                kickoff_at="2099-08-15T14:00:00Z",
+                status="completed",
+                source_status="FINISHED",
+                score_home=1,
+                score_away=0,
+            )
+        ],
+    )
+    store.write("registry.json", [endpoint("alpha")])
+    row = prediction()
+    row["prediction"] = {"predicted_score_home": 1, "predicted_score_away": 0, "confidence": None}
+    row["raw_response"] = dict(row["prediction"])
+    store.write("predictions.json", [row])
+    store.write(
+        "scores.json",
+        [{"contestant_id": "alpha", "match_id": "fd-1001", "points": 1.5, "reason": "exact_score"}],
+    )
+
+    response = TestClient(app).get("/tipping/fixtures/fd-1001")
+
+    assert response.status_code == 200
     assert "Most confident correct" not in response.text
     assert "Boldest miss" not in response.text
-    assert response.text.index("Alpha Model") < response.text.index("Beta") < response.text.index("Gamma")
+
+
+def test_fixture_detail_omits_callouts_when_predictions_are_hidden(
+    tmp_path,
+    monkeypatch,
+    make_fixture,
+) -> None:
+    store = configure_app_store(tmp_path, monkeypatch)
+    store.write("fixtures.json", [make_fixture(kickoff_at="2099-08-15T14:00:00Z")])
+    store.write("registry.json", [endpoint()])
+    store.write("predictions.json", [prediction()])
+    store.write(
+        "scores.json",
+        [{"contestant_id": "alpha", "match_id": "fd-1001", "points": 1.5, "reason": "exact_score"}],
+    )
+
+    response = TestClient(app).get("/tipping/fixtures/fd-1001")
+
+    assert response.status_code == 200
+    assert "Most confident correct" not in response.text
+    assert "Boldest miss" not in response.text
+
+
+def test_fixture_detail_boldest_miss_draw_pick_reads_naturally(
+    tmp_path,
+    monkeypatch,
+    make_fixture,
+) -> None:
+    store = configure_app_store(tmp_path, monkeypatch)
+    store.write(
+        "fixtures.json",
+        [
+            make_fixture(
+                kickoff_at="2099-08-15T14:00:00Z",
+                status="completed",
+                source_status="FINISHED",
+                score_home=1,
+                score_away=0,
+            )
+        ],
+    )
+    store.write("registry.json", [endpoint("alpha")])
+    row = prediction()
+    row["prediction"] = {"predicted_score_home": 1, "predicted_score_away": 1, "confidence": 0.5}
+    row["raw_response"] = dict(row["prediction"])
+    store.write("predictions.json", [row])
+    store.write(
+        "scores.json",
+        [{"contestant_id": "alpha", "match_id": "fd-1001", "points": 0.0, "reason": "incorrect_result"}],
+    )
+
+    response = TestClient(app).get("/tipping/fixtures/fd-1001")
+
+    assert response.status_code == 200
+    assert "Predicted a draw — wrong on the result" in response.text
+    assert "Backed Draw" not in response.text
 
 
 def test_today_uses_requested_user_timezone_for_fixture_date(
@@ -679,3 +837,43 @@ def test_simulation_actions_are_disabled_while_run_is_pending(
     assert 'disabled aria-disabled="true">Queued</button>' in leaderboard_response.text
     assert simulation_response.status_code == 200
     assert 'disabled aria-disabled="true">Simulation queued</button>' in simulation_response.text
+
+
+def test_admin_reconcile_reports_and_fixes_drift(tmp_path, monkeypatch, make_fixture) -> None:
+    store = configure_app_store(tmp_path, monkeypatch)
+    store.write("fixtures.json", [make_fixture(source_match_id=1, status="completed", score_home=1, score_away=0)])
+    store.write("registry.json", [endpoint("alpha")])
+    store.write(
+        "predictions.json",
+        [
+            {
+                "id": "p1",
+                "contestant_id": "alpha",
+                "match_id": "fd-1",
+                "valid": True,
+                "prediction": {"predicted_score_home": 1, "predicted_score_away": 0},
+            }
+        ],
+    )
+    # Drifted stored score: says 0.0 incorrect, but 1-0 vs a 1-0 prediction is an exact score.
+    store.write(
+        "scores.json",
+        [{"contestant_id": "alpha", "match_id": "fd-1", "points": 0.0, "reason": "incorrect_result", "scored_at": "2026-08-01T00:00:00Z"}],
+    )
+
+    client = TestClient(app)
+    client.cookies.set("admin_session", encrypt_admin_cookie(), path="/tipping")
+
+    page = client.get("/tipping/admin")
+    assert page.status_code == 200
+    assert "Reconciliation" in page.text
+    assert "changed" in page.text  # the drift is surfaced
+
+    applied = client.post("/tipping/admin/reconcile", follow_redirects=False)
+    assert applied.status_code in (302, 303, 307)
+
+    row = next(s for s in store.read("scores.json") if s["contestant_id"] == "alpha")
+    assert (row["points"], row["reason"]) == (1.5, "exact_score")
+
+    # A second GET now reports aligned.
+    assert "All 1 scores match" in client.get("/tipping/admin").text

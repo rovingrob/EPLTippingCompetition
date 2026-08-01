@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 from .models import (
@@ -97,32 +98,50 @@ def score_prediction(
     return 0.0, "incorrect_result"
 
 
-def score_completed_matches(
-    fixtures: list[dict[str, Any]],
+def _scored_contestant_ids(
     registry: list[dict[str, Any]],
     predictions: list[dict[str, Any]],
-    scores: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    existing = {(score["contestant_id"], score["match_id"]) for score in scores}
-    prediction_by_key = {
-        (prediction["contestant_id"], prediction["match_id"]): prediction
-        for prediction in predictions
-    }
-    contestant_ids = {
+) -> set[str]:
+    ids = {
         contestant["id"]
         for contestant in registry
         if contestant.get("status", "active") == "active"
     }
-    contestant_ids.update(prediction["contestant_id"] for prediction in predictions)
+    ids.update(prediction["contestant_id"] for prediction in predictions)
+    return ids
 
-    new_scores = list(scores)
-    for fixture in fixtures:
+
+def recompute_scores(
+    fixtures: list[dict[str, Any]],
+    registry: list[dict[str, Any]],
+    predictions: list[dict[str, Any]],
+    previous_scores: list[dict[str, Any]] | None = None,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """Return the authoritative score set for all completed fixtures.
+
+    Deterministic: recomputes every score from the current fixtures and
+    predictions rather than trusting stored scores, so any drift self-corrects.
+    Scores for non-completed fixtures are dropped. ``scored_at`` is preserved
+    for scores whose points and reason are unchanged.
+    """
+    timestamp = isoformat_z(now or utc_now())
+    previous = {
+        (score["contestant_id"], score["match_id"]): score
+        for score in (previous_scores or [])
+    }
+    prediction_by_key = {
+        (prediction["contestant_id"], prediction["match_id"]): prediction
+        for prediction in predictions
+    }
+    contestant_ids = _scored_contestant_ids(registry, predictions)
+
+    scores: list[dict[str, Any]] = []
+    for fixture in sorted(fixtures, key=fixture_sort_key):
         if not is_completed_fixture(fixture):
             continue
         for contestant_id in sorted(contestant_ids):
             key = (contestant_id, fixture["match_id"])
-            if key in existing:
-                continue
             record = prediction_by_key.get(key)
             if record is None:
                 points, reason = 0.0, "missing_prediction"
@@ -132,16 +151,87 @@ def score_completed_matches(
                     record.get("prediction"),
                     bool(record.get("valid")),
                 )
-            new_scores.append(
+            prior = previous.get(key)
+            if prior and prior.get("points") == points and prior.get("reason") == reason and prior.get("scored_at"):
+                scored_at = prior["scored_at"]
+            else:
+                scored_at = timestamp
+            scores.append(
                 {
                     "contestant_id": contestant_id,
                     "match_id": fixture["match_id"],
                     "points": points,
                     "reason": reason,
-                    "scored_at": isoformat_z(utc_now()),
+                    "scored_at": scored_at,
                 }
             )
-    return new_scores
+    return scores
+
+
+def reconcile_report(
+    stored_scores: list[dict[str, Any]],
+    fixtures: list[dict[str, Any]],
+    registry: list[dict[str, Any]],
+    predictions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Compare stored scores against the authoritative recompute.
+
+    Buckets differences into ``changed`` (points/reason differ), ``missing``
+    (should exist but absent) and ``stale`` (stored but should not exist).
+    Read-only: changes nothing.
+    """
+    expected = recompute_scores(fixtures, registry, predictions, previous_scores=stored_scores)
+    stored_by = {(row["contestant_id"], row["match_id"]): row for row in stored_scores}
+    expected_by = {(row["contestant_id"], row["match_id"]): row for row in expected}
+    fixtures_by = {fixture["match_id"]: fixture for fixture in fixtures}
+
+    changed: list[dict[str, Any]] = []
+    missing: list[dict[str, Any]] = []
+    stale: list[dict[str, Any]] = []
+
+    for key, want in expected_by.items():
+        have = stored_by.get(key)
+        want_summary = {"points": want["points"], "reason": want["reason"]}
+        if have is None:
+            missing.append({"contestant_id": key[0], "match_id": key[1], "expected": want_summary})
+        elif (have.get("points"), have.get("reason")) != (want["points"], want["reason"]):
+            changed.append(
+                {
+                    "contestant_id": key[0],
+                    "match_id": key[1],
+                    "stored": {"points": have.get("points"), "reason": have.get("reason")},
+                    "expected": want_summary,
+                }
+            )
+
+    for key, have in stored_by.items():
+        if key in expected_by:
+            continue
+        fixture = fixtures_by.get(key[1])
+        if fixture is None:
+            why = "fixture missing"
+        elif not is_completed_fixture(fixture):
+            why = "fixture not completed"
+        else:
+            why = "contestant not scored"
+        stale.append(
+            {
+                "contestant_id": key[0],
+                "match_id": key[1],
+                "stored": {"points": have.get("points"), "reason": have.get("reason")},
+                "why": why,
+            }
+        )
+
+    counts = {"changed": len(changed), "missing": len(missing), "stale": len(stale)}
+    return {
+        "aligned": counts["changed"] == 0 and counts["missing"] == 0 and counts["stale"] == 0,
+        "total": len(stored_scores),
+        "counts": counts,
+        "changed": changed,
+        "missing": missing,
+        "stale": stale,
+    }
 
 
 def leaderboard(registry: list[dict[str, Any]], scores: list[dict[str, Any]]) -> list[dict[str, Any]]:

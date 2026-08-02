@@ -1,0 +1,3 @@
+This directory intentionally left mostly empty: static assets are served by
+the FastAPI app itself (via StaticFiles) through the Cloud Function. Hosting
+just needs a non-empty public dir to rewrite everything else to the function.

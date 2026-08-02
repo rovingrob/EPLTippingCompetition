@@ -101,7 +101,13 @@ class JsonStore:
             pass
 
 
-def get_store(data_dir: Path | str | None = None) -> JsonStore:
-    store = JsonStore(data_dir)
+def get_store(data_dir: Path | str | None = None) -> Any:
+    backend = os.getenv("TIPPING_STORAGE_BACKEND", "json").strip().lower()
+    if backend == "firestore":
+        from .firestore_store import FirestoreStore
+
+        store: Any = FirestoreStore(data_dir)
+    else:
+        store = JsonStore(data_dir)
     store.ensure_defaults()
     return store

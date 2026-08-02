@@ -1,0 +1,9 @@
+firebase-functions
+a2wsgi
+fastapi
+jinja2
+python-multipart
+httpx
+cryptography
+google-cloud-firestore
+python-dotenv
